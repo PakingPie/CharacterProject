@@ -82,6 +82,16 @@ Shader "Custom/FabricPBR"
             #pragma multi_compile _CLUSTER_LIGHT_LOOP
             
 
+            // Textures and samplers must live outside the CBuffer
+            TEXTURE2D(_MainTex);         SAMPLER(sampler_MainTex);
+            TEXTURE2D(_NormalMap);       SAMPLER(sampler_NormalMap);
+            TEXTURE2D(_MetallicMap);     SAMPLER(sampler_MetallicMap);
+            TEXTURE2D(_RoughnessMap);    SAMPLER(sampler_RoughnessMap);
+            TEXTURE2D(_AOMap);           SAMPLER(sampler_AOMap);
+            TEXTURE2D(_AnisotropyMap);   SAMPLER(sampler_AnisotropyMap);
+            TEXTURE2D(_HeightMap);       SAMPLER(sampler_HeightMap);
+            TEXTURECUBE(_CustomCubemap); SAMPLER(sampler_CustomCubemap);
+
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
                 float _Metallic;
@@ -98,21 +108,11 @@ Shader "Custom/FabricPBR"
                 float _Sheen;
                 float4 _SheenColor;
                 float4 _TextureTiling;
-
-                // Texture samplers
-                sampler2D _MainTex;
                 float4 _MainTex_ST;
-                sampler2D _NormalMap;
-                sampler2D _MetallicMap;
-                sampler2D _RoughnessMap;
-                sampler2D _AOMap;
-                sampler2D _AnisotropyMap;
-                sampler2D _HeightMap;
 
                 // Reflection
                 float _UseReflectiveProbe;
                 float _UseCustomCubemap;
-                samplerCUBE _CustomCubemap;
 
                 // Toggles
                 float _UseNormalMap;
@@ -216,7 +216,7 @@ Shader "Custom/FabricPBR"
                     inputData.normalWS = TransformTangentToWorld(normalTS,half3x3(IN.tangentWS.xyz, IN.bitangentWS.xyz, IN.normalWS.xyz));
                 #else
                     half3 viewDirWS = GetWorldSpaceNormalizeViewDir(inputData.positionWS);
-                    inputData.normalWS = IN.normalWS;
+                    inputData.normalWS = IN.normalWS.xyz;
                 #endif
 
                 inputData.normalWS = NormalizeNormalPerPixel(inputData.normalWS);
@@ -281,14 +281,14 @@ Shader "Custom/FabricPBR"
             {
                 surfaceData = (SurfaceData)0;
 
-                surfaceData.albedo = _BaseColor.rgb * tex2D(_MainTex, uv).rgb;
+                surfaceData.albedo = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).rgb;
                 surfaceData.specular = _SpecularColor.rgb * _SpecularIntensity;
                 surfaceData.metallic = _Metallic;
                 surfaceData.smoothness = 1.0 - _Roughness;
-                surfaceData.normalTS = _UseNormalMap > 0 ? UnpackNormal(tex2D(_NormalMap, uv)) : float3(0, 0, 1);
+                surfaceData.normalTS = _UseNormalMap > 0 ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv)) : float3(0, 0, 1);
                 surfaceData.emission = _EnableEmission > 0 ? _EmissionColor.rgb : float3(0, 0, 0);
                 surfaceData.occlusion = _AmbientOcclusion;
-                surfaceData.alpha = _BaseColor.a * tex2D(_MainTex, uv).a;
+                surfaceData.alpha = _BaseColor.a * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).a;
                 surfaceData.clearCoatMask = _ClearCoat;
                 surfaceData.clearCoatSmoothness = 1.0 - _ClearCoatRoughness;
             }
@@ -309,7 +309,7 @@ Shader "Custom/FabricPBR"
                 return float2(DirectAO, IndirectAO);
             }
 
-            float3 CalculateSSAO(Varyings IN, float2 screenPos, float ambientOcclusion)
+            float3 CalculateBakedIrradiance(Varyings IN, float2 screenPos, float ambientOcclusion)
             {
                 float2 ambientSSAO = AmbientSampleSSAO(screenPos);
                 float indirectAO = min(ambientSSAO.y, ambientOcclusion);
@@ -323,125 +323,126 @@ Shader "Custom/FabricPBR"
 
                 InitializeBakedGIData(IN, inputData);
 
-                Light mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
-
                 float3 ssao = inputData.bakedGI * indirectAO;
                 
                 return ssao;
             }
 
-            // http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
-            // efficient VanDerCorpus calculation.
-            float RadicalInverse_VdC(uint bits) 
+            // Returns combined IBL specular + diffuse contribution.
+            // bakedIrradiance: ssao (bakedGI * AO) used as irradiance source for the probe path.
+            float3 CalculateIBL(
+            float3 normalWS, float3 viewDirWS, float3 positionWS, float2 screenUV,
+            float3 albedo,   float   roughness,
+            float3 kS,       float3  kD,
+            float2 brdf,     float   envLOD,
+            float3 bakedIrradiance)
             {
-                bits = (bits << 16u) | (bits >> 16u);
-                bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-                bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-                bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-                bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-                return float(bits) * 2.3283064365386963e-10; // / 0x100000000
-            }
-            // ----------------------------------------------------------------------------
-            float2 Hammersley(uint i, uint N)
-            {
-                return float2(float(i)/float(N), RadicalInverse_VdC(i));
-            }
-            // ----------------------------------------------------------------------------
-            float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
-            {
-                float a = roughness*roughness;
-                
-                float phi = 2.0 * PI * Xi.x;
-                float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
-                float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
-                
-                // from spherical coordinates to cartesian coordinates - halfway vector
-                float3 H;
-                H.x = cos(phi) * sinTheta;
-                H.y = sin(phi) * sinTheta;
-                H.z = cosTheta;
-                
-                // from tangent-space H vector to world-space sample vector
-                float3 up        = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
-                float3 tangent   = normalize(cross(up, N));
-                float3 bitangent = cross(N, tangent);
-                
-                float3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
-                return normalize(sampleVec);
-            }
-            // ----------------------------------------------------------------------------
-            float GeometrySchlickGGX(float NdotV, float roughness)
-            {
-                // note that we use a different k for IBL
-                float a = roughness;
-                float k = (a * a) / 2.0;
+                float3 envContribution = 0;
+                float3 irradianceIBL   = 0;
 
-                float nom   = NdotV;
-                float denom = NdotV * (1.0 - k) + k;
-
-                return nom / denom;
-            }
-            // ----------------------------------------------------------------------------
-            float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
-            {
-                float NdotV = max(dot(N, V), 0.0);
-                float NdotL = max(dot(N, L), 0.0);
-                float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-                float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-
-                return ggx1 * ggx2;
-            }
-            // ----------------------------------------------------------------------------
-            float2 IntegrateBRDF(float NdotV, float roughness)
-            {
-                float3 V;
-                V.x = sqrt(1.0 - NdotV*NdotV);
-                V.y = 0.0;
-                V.z = NdotV;
-
-                float A = 0.0;
-                float B = 0.0; 
-
-                float3 N = float3(0.0, 0.0, 1.0);
-                
-                const uint SAMPLE_COUNT = 64u;
-
-                UNITY_LOOP
-                for(uint i = 0u; i < SAMPLE_COUNT; ++i)
+                if (_UseCustomCubemap > 0)
                 {
-                    // generates a sample vector that's biased towards the
-                    // preferred alignment direction (importance sampling).
-                    float2 Xi = Hammersley(i, SAMPLE_COUNT);
-                    float3 H = ImportanceSampleGGX(Xi, N, roughness);
-                    float3 L = normalize(2.0 * dot(V, H) * H - V);
+                    float3 reflectDir = reflect(-viewDirWS, normalWS);
 
-                    float NdotL = max(L.z, 0.0);
-                    float NdotH = max(H.z, 0.0);
-                    float VdotH = max(dot(V, H), 0.0);
+                    // IBL Specular: prefiltered env × (F × scale + bias)
+                    float3 prefilteredColor = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, reflectDir, envLOD).rgb;
+                    envContribution = prefilteredColor * (kS * brdf.x + brdf.y);
 
-                    if(NdotL > 0.0)
-                    {
-                        float G = GeometrySmith(N, V, L, roughness);
-                        float G_Vis = (G * VdotH) / (NdotH * NdotV);
-                        float Fc = pow(1.0 - VdotH, 5.0);
-
-                        A += (1.0 - Fc) * G_Vis;
-                        B += Fc * G_Vis;
-                    }
+                    // IBL Diffuse: max-LOD sample as irradiance proxy; apply kD and albedo
+                    float3 irradiance = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, normalWS, 6.0).rgb;
+                    irradianceIBL = kD * albedo * irradiance;
                 }
-                A /= float(SAMPLE_COUNT);
-                B /= float(SAMPLE_COUNT);
-                return float2(A, B);
+                else if (_UseReflectiveProbe > 0)
+                {
+                    float3 reflectDir = reflect(-viewDirWS, normalWS);
+
+                    // IBL Specular via Unity reflection probe (handles probe blending + HDR decode)
+                    float3 prefilteredColor = GlossyEnvironmentReflection(reflectDir, positionWS, roughness, 1.0, screenUV);
+                    envContribution = prefilteredColor * (kS * brdf.x + brdf.y);
+
+                    // IBL Diffuse: baked SH/lightmap irradiance, apply kD and albedo
+                    irradianceIBL = kD * albedo * bakedIrradiance;
+                }
+
+                return envContribution + irradianceIBL;
             }
-            // ----------------------------------------------------------------------------
-            float2 CalculateBRDF(float2 uv)
+
+            // Analytical approximation of the split-sum BRDF LUT (Karis / UE4)
+            // Replaces the expensive per-pixel Monte Carlo integration.
+            float2 EnvBRDFApprox(float roughness, float NoV)
             {
-                return IntegrateBRDF(uv.x, uv.y);
+                const float4 c0 = float4(-1.0, -0.0275, -0.572,  0.022);
+                const float4 c1 = float4( 1.0,  0.0425,  1.040, -0.040);
+                float4 r    = roughness * c0 + c1;
+                float  a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
+                return float2(-1.04, 1.04) * a004 + r.zw;
             }
 
             float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
             {
-                return F0 + (max(1.0 - roughness, F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+                return F0 + (max((float3)(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+            }
+
+            float3 FresnelSchlick(float cosTheta, float3 F0)
+            {
+                return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+            }
+
+            float DistributionGGXAnisotropic(float3 N, float3 V, float3 L, float3 T, float3 H, float roughness)
+            {
+                float aspect = sqrt(1.0 - 0.9 * _Anisotropy); // remap [0,1] anisotropy to [1,0.316] aspect ratio
+                float ax = max(0.001, roughness * roughness / aspect);
+                float ay = max(0.001, roughness * roughness * aspect);
+                float XoH = dot(T, H);
+                float YoH = dot(cross(N, T), H);
+                float NoH = dot(N, H);
+                float d = XoH * XoH / (ax * ax) + YoH * YoH / (ay * ay) + NoH * NoH;
+                return rcp(PI * ax * ay * d * d);
+            }
+
+            float GeometrySmithSchlickGGX_float(float NoV, float NoL, float roughness)
+            {
+                float k = max(roughness * roughness / 2, 0.0001);
+                float smithV = NoV * rcp(NoV * (1 - k) + k);
+                float smithL = NoL * rcp(NoL * (1 - k) + k);
+                return smithV * smithL;
+            }
+
+            float3 CalculateSheen(float3 color, float sheen, float3 sheenTint, float HoL)
+            {
+                float luminance = dot(color, float3(0.3, 0.6, 0.1));
+                float3 tint = luminance > 0 ? color * rcp(luminance) : 1;
+                if(sheen <= 0)
+                return 0;
+                else
+                return lerp(1, tint, sheenTint) * pow(saturate(1 - HoL), 5);
+            }
+
+            float3 CalculateClearcoat(float clearcoat, float alpha, float NoH, float HoL, float NoL, float NoV)
+            {
+                float d = 0;
+                alpha = lerp(0.1, 0.001, alpha);
+                if (alpha >= 1)
+                {
+                    d = rcp(PI);
+                }
+                else
+                {
+                    float a2 = alpha * alpha;
+                    d = (a2 - 1) * rcp(PI * log(a2) * (1 +  (a2 - 1) * NoH * NoH));
+                }
+
+                float f = 0.04 + (1 - 0.04) * pow(saturate(1-HoL), 5); 
+                float a2 = 0.25 * 0.25;
+
+                float gl = 2 * rcp(1+sqrt(a2 + (1-a2)*NoL*NoL));
+                float gv = 2 * rcp(1+sqrt(a2 + (1-a2)*NoV*NoV));
+
+                if(clearcoat<= 0)
+                    return 0;
+                else
+                    return 0.25 * clearcoat * d* f* gl * gv;
+
             }
 
             float4 frag(Varyings IN) : SV_Target
@@ -449,53 +450,77 @@ Shader "Custom/FabricPBR"
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
 
-                float4 color = 0;
+                float2 screenUV = GetNormalizedScreenSpaceUV(IN.positionCS);
 
-                float2 screenUV = GetNormalizedScreenSpaceUV(IN.positionCS); 
+                // ---------- Baked GI Calculation (Irradiance + Shadow Mask) ----------
+                float3 bakedIrradiance = CalculateBakedIrradiance(IN, screenUV, _AmbientOcclusion);
 
-                float3 ssao = CalculateSSAO(IN, screenUV, _AmbientOcclusion);
+                float3 normalWS  = IN.normalWS.xyz;
+                float3 viewDirWS = SafeNormalize(half3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w));
 
-                float3 normalWS = IN.normalWS.xyz;
-                float3 viewDirWS = half3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w);
+                // Sample surface maps
+                float3 albedo    = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).rgb;
+                float  metallic  = _UseMetallicMap  > 0 ? SAMPLE_TEXTURE2D(_MetallicMap,  sampler_MetallicMap,  IN.uv).r * _Metallic  : _Metallic;
+                float  roughness = _UseRoughnessMap > 0 ? SAMPLE_TEXTURE2D(_RoughnessMap, sampler_RoughnessMap, IN.uv).r * _Roughness : _Roughness;
+                roughness = max(roughness, 0.045); // prevent degenerate specular at roughness = 0
+
                 float nov = max(dot(normalWS, viewDirWS), 0.0);
-                float2 brdf = saturate(CalculateBRDF(float2(nov, _Roughness)));
-                float3 specular = brdf.x * FresnelSchlickRoughness(nov, float3(_F0, _F0, _F0), _Roughness).r + brdf.y;
-                float3 envContribution = 0;
-                float envLOD = _Roughness * 4.0; // Example LOD calculation based on roughness
 
-                // Sample Cubemap and Reflective Probe contribution
-                if (_UseCustomCubemap > 0)
-                {
-                    float3 reflectDir = reflect(-viewDirWS, normalWS);
-                    // Sample the custom cubemap using the reflection direction and LOD for roughness
-                    envContribution += texCUBElod(_CustomCubemap, float4(reflectDir, envLOD)).rgb;
-                }
-                else if (_UseReflectiveProbe > 0)
-                {
-                    float3 reflectDir = reflect(-viewDirWS, normalWS);
-                    float perceptualRoughness = _Roughness;
-                    envContribution += GlossyEnvironmentReflection(reflectDir, IN.positionWS, perceptualRoughness, 1.0, screenUV);
-                }
+                // F0: dielectrics use _F0 (default 0.04), metals tint F0 with albedo
+                float3 F0 = lerp(float3(_F0, _F0, _F0), albedo, metallic);
 
-                float3 irradianceIBL = 0;
-                float3 up = float3(0, 1, 0);
-                float3 right = normalize(cross(up, normalWS));
-                up = normalize(cross(normalWS, right));
-                float sampleDelta = 0.025;
-                float nrSamples = 0.0;
-                for(float phi = 0; phi < 2 * PI; phi += sampleDelta)
-                {
-                    for(float theta = 0; theta < 0.5 * PI; theta += sampleDelta)
-                    {
-                        float3 tangentSample = float3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-                        float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normalWS;
-                        irradianceIBL += texCUBE(_CustomCubemap, sampleVec).rgb * cos(theta) * sin(theta);
-                        nrSamples++;
-                    }
-                }
-                irradianceIBL = (PI * irradianceIBL) / nrSamples;
-                
-                return float4(specular + envContribution + irradianceIBL, 1);
+                // Energy conservation: kS (reflected) + kD (diffuse) = 1
+                float3 kS = FresnelSchlickRoughness(nov, F0, roughness);
+                float3 kD = (1.0 - kS) * (1.0 - metallic);
+
+                // Split-sum BRDF via analytical LUT approximation
+                float2 brdf   = EnvBRDFApprox(roughness, nov);
+                float  envLOD = roughness * 6.0; // URP cubemaps support up to 6 mip levels
+
+                float3 ibl = CalculateIBL(
+                normalWS, viewDirWS, IN.positionWS, screenUV,
+                albedo,   roughness,
+                kS,       kD,
+                brdf,     envLOD,
+                bakedIrradiance);
+
+                // ---------- PBR Main Lighting Calculation ----------
+                float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
+                Light mainLight = GetMainLight(shadowCoord);
+                float nol = max(dot(normalWS, mainLight.direction), 0.0);
+                float3 h   = normalize(viewDirWS + mainLight.direction);
+                float voh  = max(dot(viewDirWS, h), 0.0); // Fresnel for direct light uses V·H, not N·V
+
+                // Fresnel at V·H for direct lighting (N·V is for IBL only)
+                float3 fresnelSchlick = FresnelSchlick(voh, F0);
+
+                float distribution = DistributionGGXAnisotropic(normalWS, viewDirWS, mainLight.direction, IN.tangentWS.xyz, h, roughness);
+                float geometry     = GeometrySmithSchlickGGX_float(nov, nol, roughness);
+
+                // Cook-Torrance: (D * G * F) / (4 * N·V * N·L)  ×  N·L  ×  lightColor  ×  shadow
+                // N·L in numerator and denominator do NOT fully cancel — numerator is irradiance foreshortening,
+                // denominator is the BRDF normalization. Omitting it causes a hard bright edge at the terminator.
+                float3 specular = (distribution * geometry * fresnelSchlick / max(4.0 * nov * nol, 0.001))
+                * nol * mainLight.color * mainLight.shadowAttenuation;
+                float luminance = dot(_BaseColor, float3(0.3, 0.6, 0.1));
+                float3 specularTint = luminance > 0 ? _BaseColor * rcp(luminance) : 1;
+                specular *= _SpecularColor.rgb * lerp(float3(1, 1, 1), _SpecularIntensity, specularTint); // apply user specular color and intensity
+
+                float3 diffuse = (1.0 - fresnelSchlick) * (1.0 - metallic) * albedo / PI;
+
+                float3 sheen = CalculateSheen(albedo, _Sheen, _SheenColor, dot(h, mainLight.direction));
+                diffuse += sheen;
+
+                float3 pbr = (diffuse + specular) * nol * mainLight.shadowAttenuation * mainLight.color;
+
+                float noh = max(dot(normalWS, h), 0.0);
+                float hol = max(dot(h, mainLight.direction), 0.0);
+
+                float3 clearcoat = CalculateClearcoat(_ClearCoat, 1 - _ClearCoatRoughness, noh, hol, nol, nov);
+
+                pbr += clearcoat * mainLight.shadowAttenuation * mainLight.color;
+                // mainLight.shadowAttenuation * mainLight.color;
+                return float4(ibl + pbr, 1);
             }
             ENDHLSL
         }
