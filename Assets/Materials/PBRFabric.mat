@@ -26,7 +26,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
   m_InvalidKeywords:
-  - Use Custom Cubemap
+  - Use Reflective Probe
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -128,13 +128,13 @@ Material:
     - _AlphaClip: 0
     - _AlphaToMask: 0
     - _AmbientOcclusion: 1
-    - _Anisotropy: 0.5
+    - _Anisotropy: 1
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
     - _ClearCoat: 0
     - _ClearCoatMask: 0
-    - _ClearCoatRoughness: 0.5
+    - _ClearCoatRoughness: 0.403
     - _ClearCoatSmoothness: 0
     - _Cull: 2
     - _Cutoff: 0.5
@@ -148,13 +148,13 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _Metallic: 1
+    - _Metallic: 0.4
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _Roughness: 0.096
-    - _Sheen: 0
+    - _Roughness: 0.25
+    - _Sheen: 1
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
@@ -164,11 +164,11 @@ Material:
     - _Surface: 0
     - _UseAOMap: 0
     - _UseAnisotropyMap: 0
-    - _UseCustomCubemap: 1
+    - _UseCustomCubemap: 0
     - _UseHeightMap: 0
     - _UseMetallicMap: 0
     - _UseNormalMap: 0
-    - _UseReflectiveProbe: 0
+    - _UseReflectiveProbe: 1
     - _UseRoughnessMap: 0
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1

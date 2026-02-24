@@ -75,11 +75,11 @@ Shader "Custom/FabricPBR"
             #pragma fragment frag
 
             #pragma multi_compile_frag _MAIN_LIGHT_SHADOWS_CASCADE
-            #pragma multi_compile _SOFT_SHADOWS
-            #pragma multi_compile _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile _ _SOFT_SHADOWS
+            #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile _ _SHADOWS_SHADOWMASK
             #pragma multi_compile _ _LIGHTMAP_SHADOW_MIXING
-            #pragma multi_compile _CLUSTER_LIGHT_LOOP
+            #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             
 
             // Textures and samplers must live outside the CBuffer
@@ -388,61 +388,62 @@ Shader "Custom/FabricPBR"
                 return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
             }
 
-            float DistributionGGXAnisotropic(float3 N, float3 V, float3 L, float3 T, float3 H, float roughness)
+            // N, T, H must be in the same space (world). Bitangent derived as cross(N,T).
+            float DistributionGGXAnisotropic(float3 N, float3 T, float3 H, float roughness)
             {
                 float aspect = sqrt(1.0 - 0.9 * _Anisotropy); // remap [0,1] anisotropy to [1,0.316] aspect ratio
                 float ax = max(0.001, roughness * roughness / aspect);
                 float ay = max(0.001, roughness * roughness * aspect);
                 float XoH = dot(T, H);
                 float YoH = dot(cross(N, T), H);
-                float NoH = dot(N, H);
+                float NoH = max(dot(N, H), 0.0);
                 float d = XoH * XoH / (ax * ax) + YoH * YoH / (ay * ay) + NoH * NoH;
                 return rcp(PI * ax * ay * d * d);
             }
 
+            // Direct lighting remapping: k = (r+1)² / 8  (Disney/UE4)
+            // IBL remapping k = r²/2 is intentionally NOT used here.
             float GeometrySmithSchlickGGX_float(float NoV, float NoL, float roughness)
             {
-                float k = max(roughness * roughness / 2, 0.0001);
-                float smithV = NoV * rcp(NoV * (1 - k) + k);
-                float smithL = NoL * rcp(NoL * (1 - k) + k);
+                float r1 = roughness + 1.0;
+                float k  = max((r1 * r1) / 8.0, 0.0001);
+                float smithV = NoV * rcp(NoV * (1.0 - k) + k);
+                float smithL = NoL * rcp(NoL * (1.0 - k) + k);
                 return smithV * smithL;
             }
 
-            float3 CalculateSheen(float3 color, float sheen, float3 sheenTint, float HoL)
+            // sheenTint: scalar [0,1] blending between white and luminance-normalized color (Disney model)
+            float3 CalculateSheen(float3 color, float sheen, float sheenTint, float HoL)
             {
+                if (sheen <= 0) return 0;
                 float luminance = dot(color, float3(0.3, 0.6, 0.1));
-                float3 tint = luminance > 0 ? color * rcp(luminance) : 1;
-                if(sheen <= 0)
-                return 0;
-                else
-                return lerp(1, tint, sheenTint) * pow(saturate(1 - HoL), 5);
+                float3 tint = luminance > 0 ? color * rcp(luminance) : (float3)1;
+                float3 sheenColor = lerp((float3)1, tint, sheenTint); // sheenTint is scalar blend factor
+                return sheen * sheenColor * pow(saturate(1.0 - HoL), 5.0);
             }
 
-            float3 CalculateClearcoat(float clearcoat, float alpha, float NoH, float HoL, float NoL, float NoV)
+            // GTR1 NDF + Smith GGX geometry for clearcoat (Disney model)
+            // NoL not needed — clearcoat geometry term uses fixed 0.25 roughness, not NoL.
+            float3 CalculateClearcoat(float clearcoat, float alpha, float NoH, float HoL, float NoV)
             {
-                float d = 0;
+                if (clearcoat <= 0) return 0;
+
+                // Remap smoothness [0,1] to GTR1 alpha [0.1, 0.001]
+                // After this remap alpha is always in (0.001, 0.1), never >= 1.
                 alpha = lerp(0.1, 0.001, alpha);
-                if (alpha >= 1)
-                {
-                    d = rcp(PI);
-                }
-                else
-                {
-                    float a2 = alpha * alpha;
-                    d = (a2 - 1) * rcp(PI * log(a2) * (1 +  (a2 - 1) * NoH * NoH));
-                }
+                float alphaSq = alpha * alpha;
 
-                float f = 0.04 + (1 - 0.04) * pow(saturate(1-HoL), 5); 
-                float a2 = 0.25 * 0.25;
+                // GTR1 (Berry / Disney clearcoat NDF)
+                float d = (alphaSq - 1.0) * rcp(PI * log(alphaSq) * (1.0 + (alphaSq - 1.0) * NoH * NoH));
 
-                float gl = 2 * rcp(1+sqrt(a2 + (1-a2)*NoL*NoL));
-                float gv = 2 * rcp(1+sqrt(a2 + (1-a2)*NoV*NoV));
+                // Fresnel: clearcoat is always dielectric F0 = 0.04
+                float f = 0.04 + 0.96 * pow(saturate(1.0 - HoL), 5.0);
 
-                if(clearcoat<= 0)
-                    return 0;
-                else
-                    return 0.25 * clearcoat * d* f* gl * gv;
+                // Smith GGX geometry at fixed clearcoat roughness = 0.25
+                float ccRoughSq = 0.25 * 0.25;
+                float gl = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoV * NoV));
 
+                return (float3)(0.25 * clearcoat * d * f * gl);
             }
 
             float4 frag(Varyings IN) : SV_Target
@@ -455,8 +456,16 @@ Shader "Custom/FabricPBR"
                 // ---------- Baked GI Calculation (Irradiance + Shadow Mask) ----------
                 float3 bakedIrradiance = CalculateBakedIrradiance(IN, screenUV, _AmbientOcclusion);
 
-                float3 normalWS  = IN.normalWS.xyz;
                 float3 viewDirWS = SafeNormalize(half3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w));
+
+                // Apply normal map to world-space normal used by all direct/IBL lighting.
+                // Without this, _UseNormalMap only affects CalculateBakedIrradiance, not specular/diffuse.
+                half3 normalTS   = _UseNormalMap > 0
+                    ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, IN.uv))
+                    : half3(0, 0, 1);
+                float3 normalWS  = _UseNormalMap > 0
+                    ? normalize(TransformTangentToWorld(normalTS, half3x3(IN.tangentWS.xyz, IN.bitangentWS.xyz, IN.normalWS.xyz)))
+                    : IN.normalWS.xyz;
 
                 // Sample surface maps
                 float3 albedo    = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).rgb;
@@ -494,32 +503,36 @@ Shader "Custom/FabricPBR"
                 // Fresnel at V·H for direct lighting (N·V is for IBL only)
                 float3 fresnelSchlick = FresnelSchlick(voh, F0);
 
-                float distribution = DistributionGGXAnisotropic(normalWS, viewDirWS, mainLight.direction, IN.tangentWS.xyz, h, roughness);
+                float distribution = DistributionGGXAnisotropic(normalWS, IN.tangentWS.xyz, h, roughness);
                 float geometry     = GeometrySmithSchlickGGX_float(nov, nol, roughness);
 
                 // Cook-Torrance: (D * G * F) / (4 * N·V * N·L)  ×  N·L  ×  lightColor  ×  shadow
                 // N·L in numerator and denominator do NOT fully cancel — numerator is irradiance foreshortening,
                 // denominator is the BRDF normalization. Omitting it causes a hard bright edge at the terminator.
-                float3 specular = (distribution * geometry * fresnelSchlick / max(4.0 * nov * nol, 0.001))
-                * nol * mainLight.color * mainLight.shadowAttenuation;
-                float luminance = dot(_BaseColor, float3(0.3, 0.6, 0.1));
-                float3 specularTint = luminance > 0 ? _BaseColor * rcp(luminance) : 1;
-                specular *= _SpecularColor.rgb * lerp(float3(1, 1, 1), _SpecularIntensity, specularTint); // apply user specular color and intensity
+                // Cook-Torrance specular BRDF (no nol/color/shadow here — applied once in pbr below)
+                float3 specular = (distribution * geometry * fresnelSchlick) / max(4.0 * nov * nol, 0.001);
 
+                // Specular tint: scalar luminance of albedo blends white→tinted (Disney specularTint model)
+                float luminance = dot(_BaseColor.rgb, float3(0.3, 0.6, 0.1));
+                float3 albedoTint = luminance > 0 ? _BaseColor.rgb * rcp(luminance) : (float3)1;
+                specular *= _SpecularColor.rgb * lerp((float3)1, albedoTint, _SpecularIntensity);
+
+                // Lambert diffuse with energy conservation
                 float3 diffuse = (1.0 - fresnelSchlick) * (1.0 - metallic) * albedo / PI;
 
-                float3 sheen = CalculateSheen(albedo, _Sheen, _SheenColor, dot(h, mainLight.direction));
+                // Sheen: fabric retroreflection, _SheenColor.r used as scalar tint blend (Disney model)
+                float3 sheen = CalculateSheen(albedo, _Sheen, _SheenColor.r, dot(h, mainLight.direction));
                 diffuse += sheen;
 
+                // Apply nol × light color × shadow once to the combined (diffuse + specular)
                 float3 pbr = (diffuse + specular) * nol * mainLight.shadowAttenuation * mainLight.color;
 
                 float noh = max(dot(normalWS, h), 0.0);
                 float hol = max(dot(h, mainLight.direction), 0.0);
 
-                float3 clearcoat = CalculateClearcoat(_ClearCoat, 1 - _ClearCoatRoughness, noh, hol, nol, nov);
-
+                float3 clearcoat = CalculateClearcoat(_ClearCoat, 1.0 - _ClearCoatRoughness, noh, hol, nov);
                 pbr += clearcoat * mainLight.shadowAttenuation * mainLight.color;
-                // mainLight.shadowAttenuation * mainLight.color;
+
                 return float4(ibl + pbr, 1);
             }
             ENDHLSL
