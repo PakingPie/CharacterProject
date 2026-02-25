@@ -68,6 +68,15 @@ Shader "Custom/FabricPBR"
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
         _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
 
+        [Header(Transparency)]
+        _Opacity("Base Opacity", Range(0, 1)) = 1.0
+        [Toggle(Use Opacity Map)] _UseOpacityMap("Use Opacity Map", Float) = 0
+        _OpacityMap("Opacity Map (R = opaque)", 2D) = "white" {}
+        [Toggle(Use Vertex Alpha)] _UseVertexAlpha("Use Vertex Color Alpha", Float) = 0
+        _FresnelOpacityPower("Edge Opacity Power", Range(1, 8)) = 3.0
+        _FresnelOpacityStrength("Edge Opacity Boost", Range(0, 1)) = 0.0
+        _SeeThruTint("See-Through Fabric Tint", Range(0, 1)) = 0.3
+
         [Header(Advanced)]
         _F0("F0 (Dielectric Reflectance)", Range(0,1)) = 0.04
         _TextureTiling("Texture Tiling", Vector) = (1,1,0,0)
@@ -83,23 +92,29 @@ Shader "Custom/FabricPBR"
         Tags
         {
             "RenderPipeline" = "UniversalPipeline"
-            "RenderType"     = "Opaque"
-            "Queue"          = "Geometry"
+            "RenderType"     = "Transparent"
+            "Queue"          = "Transparent"
         }
 
+        // ═══════════════════════════════════════════════
+        // Pass 0 : ForwardLit
+        // ═══════════════════════════════════════════════
         Pass
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
 
-            Cull Back
+            Cull Off
             ZWrite On
             ZTest LEqual
+            // No Blend statement — we composite manually
+            // against _CameraOpaqueTexture
 
             HLSLPROGRAM
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
 
             #pragma vertex vert
             #pragma fragment frag
@@ -131,6 +146,7 @@ Shader "Custom/FabricPBR"
             TEXTURE2D(_AOMap);             SAMPLER(sampler_AOMap);
             TEXTURE2D(_AnisotropyMap);     SAMPLER(sampler_AnisotropyMap);
             TEXTURE2D(_HeightMap);         SAMPLER(sampler_HeightMap);
+            TEXTURE2D(_OpacityMap);        SAMPLER(sampler_OpacityMap);
             TEXTURECUBE(_CustomCubemap);   SAMPLER(sampler_CustomCubemap);
 
             CBUFFER_START(UnityPerMaterial)
@@ -154,20 +170,24 @@ Shader "Custom/FabricPBR"
                 float  _HeightScale;
                 float  _NormalStrength;
 
-                // Subsurface Transmission
                 float  _Subsurface;
                 float4 _SubsurfaceColor;
                 float  _TransmissionDistortion;
                 float  _TransmissionPower;
                 float  _AmbientTransmission;
 
-                // Wrap Diffuse
                 float  _DiffuseWrap;
 
-                // Fabric Fuzz
                 float  _FuzzIntensity;
                 float4 _FuzzColor;
                 float  _FuzzPower;
+
+                float  _Opacity;
+                float  _UseOpacityMap;
+                float  _UseVertexAlpha;
+                float  _FresnelOpacityPower;
+                float  _FresnelOpacityStrength;
+                float  _SeeThruTint;
 
                 float  _UseReflectiveProbe;
                 float  _UseCustomCubemap;
@@ -191,6 +211,7 @@ Shader "Custom/FabricPBR"
                 float2 texcoord          : TEXCOORD0;
                 float2 staticLightmapUV  : TEXCOORD1;
                 float2 dynamicLightmapUV : TEXCOORD2;
+                float4 color             : COLOR;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -199,9 +220,9 @@ Shader "Custom/FabricPBR"
                 float4 positionCS  : SV_POSITION;
                 float2 uv          : TEXCOORD0;
                 float3 positionWS  : TEXCOORD1;
-                float4 normalWS    : TEXCOORD2;
-                float4 tangentWS   : TEXCOORD3;
-                float4 bitangentWS : TEXCOORD4;
+                float4 normalWS    : TEXCOORD2;   // xyz: normal,    w: viewDir.x
+                float4 tangentWS   : TEXCOORD3;   // xyz: tangent,   w: viewDir.y
+                float4 bitangentWS : TEXCOORD4;   // xyz: bitangent, w: viewDir.z
 
                 #ifdef _ADDITIONAL_LIGHTS_VERTEX
                     half3 vertexLighting : TEXCOORD5;
@@ -221,7 +242,8 @@ Shader "Custom/FabricPBR"
                     float4 probeOcclusion : TEXCOORD9;
                 #endif
 
-                half fogFactor : TEXCOORD10;
+                half   fogFactor   : TEXCOORD10;
+                float4 vertexColor : TEXCOORD11;
 
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
@@ -249,6 +271,8 @@ Shader "Custom/FabricPBR"
                 OUT.normalWS    = float4(normalInput.normalWS,    viewDirWS.x);
                 OUT.tangentWS   = float4(normalInput.tangentWS,   viewDirWS.y);
                 OUT.bitangentWS = float4(normalInput.bitangentWS, viewDirWS.z);
+
+                OUT.vertexColor = IN.color;
 
                 OUTPUT_LIGHTMAP_UV(IN.staticLightmapUV, unity_LightmapST, OUT.staticLightmapUV);
                 #ifdef DYNAMICLIGHTMAP_ON
@@ -411,7 +435,7 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // Fabric Sheen: Charlie NDF + Neubelt V (clamped)
+            // Fabric Sheen: Charlie NDF + Neubelt V
             // ──────────────────────────────────────────────
             float CharlieD(float sheenRoughness, float NoH)
             {
@@ -485,32 +509,25 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // ★ NEW: Subsurface Transmission
+            // ★ Subsurface Transmission (FIXED)
             //
-            // Simulates light passing through thin fabric.
-            // Uses a distorted back-lit vector to create a
-            // view-dependent glow from behind.  Shadow is
-            // intentionally NOT applied — the surface is
-            // in its own shadow from the light's POV, but
-            // real thin fabric still transmits that light.
+            // Previous version multiplied by albedo, which
+            // killed the effect on dark fabrics. Removed:
+            // the subsurface color itself should represent
+            // the combined skin + fabric filter color.
             // ──────────────────────────────────────────────
             float3 EvaluateTransmission(
                 float3 N, float3 V, float3 L,
                 float3 lightColor,
-                float3 albedo,
                 float  subsurface, float3 subsurfaceColor,
                 float  distortion, float  power)
             {
                 if (subsurface <= 0.0) return 0.0;
 
-                // Distort the light direction by the surface normal
-                // so the transmission lobe is spread and view-dependent
                 float3 transLight = normalize(L + N * distortion);
-                float  VdotNegTL = pow(saturate(dot(V, -transLight)), power);
+                float  VdotNegTL  = pow(saturate(dot(V, -transLight)), power);
 
-                // Modulate by albedo so dark fabric transmits less
-                return subsurface * subsurfaceColor * albedo
-                     * VdotNegTL * lightColor;
+                return subsurface * subsurfaceColor * VdotNegTL * lightColor;
             }
 
             // ──────────────────────────────────────────────
@@ -558,7 +575,7 @@ Shader "Custom/FabricPBR"
                     ? SAMPLE_TEXTURE2D(_AnisotropyMap, sampler_AnisotropyMap, uv).r * _Anisotropy
                     : _Anisotropy;
 
-                // ── Normal (★ with strength control) ─────
+                // ── Normal (with strength) ───────────────
                 half3 normalTS = half3(0, 0, 1);
                 if (_UseNormalMap > 0)
                 {
@@ -574,13 +591,36 @@ Shader "Custom/FabricPBR"
 
                 float3 normalWS = normalize(TransformTangentToWorld(normalTS, tbnMatrix));
 
-                // ★ Re-orthogonalize tangent against the
-                //   perturbed normal so anisotropy direction
-                //   stays in the tangent plane.
                 float3 tangentWS = normalize(IN.tangentWS.xyz
                     - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
                 float nov = max(dot(normalWS, viewDirWS), 0.0001);
+
+                // ── Opacity ──────────────────────────────
+                float opacity = _Opacity;
+
+                if (_UseOpacityMap > 0)
+                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, uv).r;
+
+                if (_UseVertexAlpha > 0)
+                    opacity *= IN.vertexColor.a;
+
+                // Fresnel edge opacity: fabric looks more
+                // opaque at grazing angles (more fiber layers)
+                if (_FresnelOpacityStrength > 0)
+                {
+                    float edgeOpacity = pow(1.0 - nov, _FresnelOpacityPower)
+                                      * _FresnelOpacityStrength;
+                    opacity = saturate(opacity + edgeOpacity);
+                }
+
+                // ── Sample scene behind (the leg skin) ───
+                float3 sceneColor = SampleSceneColor(screenUV);
+
+                // Tint the see-through by fabric color
+                float3 tintedScene = lerp(sceneColor,
+                                          sceneColor * albedo * 2.0,
+                                          _SeeThruTint);
 
                 // ── F0 ───────────────────────────────────
                 float  lum        = dot(_BaseColor.rgb, float3(0.3, 0.6, 0.1));
@@ -634,25 +674,21 @@ Shader "Custom/FabricPBR"
 
                 ibl *= ao;
 
-                // ── ★ Fabric Fuzz (Fresnel rim from
-                //      scattered ambient light in fibers) ─
+                // ── Fabric Fuzz ──────────────────────────
                 if (_FuzzIntensity > 0)
                 {
                     float fuzzFresnel = pow(1.0 - nov, _FuzzPower);
                     float3 fuzz = _FuzzColor.rgb * _FuzzIntensity * fuzzFresnel;
-                    // Modulate by ambient so it responds to environment
                     float3 ambientLevel = max(bakedIrradiance, 0.05);
                     ibl += fuzz * ambientLevel * ao;
                 }
 
-                // ── ★ Indirect (ambient) Transmission ────
-                //    Sample SH from the back-face normal to
-                //    approximate ambient light leaking through
+                // ── Indirect Transmission ────────────────
                 if (_Subsurface > 0 && _AmbientTransmission > 0)
                 {
                     float3 backIrradiance = max(0, SampleSH(-normalWS));
                     float3 indirectTrans  = _Subsurface * _AmbientTransmission
-                                          * _SubsurfaceColor.rgb * albedo
+                                          * _SubsurfaceColor.rgb
                                           * backIrradiance * rcp(PI);
                     ibl += indirectTrans * ao;
                 }
@@ -661,7 +697,6 @@ Shader "Custom/FabricPBR"
                 float3 emission = _EnableEmission > 0
                     ? _EmissionColor.rgb : (float3)0;
 
-                // ── Sheen energy compensation ────────────
                 float sheenAlbedo = SheenDirectionalAlbedo(_Sheen, _SheenRoughness);
 
                 // ══════════════════════════════════════════
@@ -672,8 +707,6 @@ Shader "Custom/FabricPBR"
 
                 float  rawNdotL = dot(normalWS, mainLight.direction);
                 float  nol      = saturate(rawNdotL);
-
-                // ★ Wrap diffuse: softer terminator for fabric
                 float  nolWrap  = saturate(
                     (rawNdotL + _DiffuseWrap) / (1.0 + _DiffuseWrap));
 
@@ -682,7 +715,6 @@ Shader "Custom/FabricPBR"
                 float  voh = max(dot(viewDirWS, h), 0.0);
                 float  hol = max(dot(h, mainLight.direction), 0.0);
 
-                // Cook-Torrance specular
                 float3 F_direct = FresnelSchlick(voh, F0);
                 float  D_direct = DistributionGGXAnisotropic(
                     normalWS, tangentWS, h, roughness, anisotropy);
@@ -690,31 +722,25 @@ Shader "Custom/FabricPBR"
                 float3 specular = (D_direct * G_direct * F_direct)
                                 / max(4.0 * nov * nol, 0.001);
 
-                // Lambert diffuse with sheen energy compensation
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
                                * (1.0 - sheenAlbedo) * albedo / PI;
 
-                // Fabric sheen
                 float3 sheen = EvaluateSheen(
                     _SheenColor.rgb, _Sheen, _SheenRoughness,
                     noh, nov, nol);
 
-                // Clearcoat
                 float3 clearcoat = EvaluateClearcoat(
                     _ClearCoat, 1.0 - _ClearCoatRoughness,
                     noh, hol, nov, nol);
 
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
 
-                // ★ Diffuse uses wrapped NoL; specular lobes use sharp NoL
                 float3 mainLighting = diffuse * nolWrap * mainRadiance
                                     + (specular + sheen + clearcoat) * nol * mainRadiance;
 
-                // ★ Direct transmission (no shadow — light passes through)
                 mainLighting += EvaluateTransmission(
                     normalWS, viewDirWS, mainLight.direction,
                     mainLight.color,
-                    albedo,
                     _Subsurface, _SubsurfaceColor.rgb,
                     _TransmissionDistortion, _TransmissionPower);
 
@@ -772,11 +798,9 @@ Shader "Custom/FabricPBR"
                     addLighting += aDiff * aNoLWrap * lightRad
                                  + (aSpec + aSheen + aCC) * aNoL * lightRad;
 
-                    // Transmission for additional lights
                     addLighting += EvaluateTransmission(
                         normalWS, viewDirWS, light.direction,
                         light.color * light.distanceAttenuation,
-                        albedo,
                         _Subsurface, _SubsurfaceColor.rgb,
                         _TransmissionDistortion, _TransmissionPower);
                 LIGHT_LOOP_END
@@ -784,10 +808,131 @@ Shader "Custom/FabricPBR"
                 // ══════════════════════════════════════════
                 //  FINAL COMPOSITION
                 // ══════════════════════════════════════════
-                float3 finalColor = ibl + mainLighting + addLighting + emission;
-                finalColor = MixFog(finalColor, IN.fogFactor);
+                float3 fabricColor = ibl + mainLighting + addLighting + emission;
+                fabricColor = MixFog(fabricColor, IN.fogFactor);
 
-                return float4(finalColor, alpha);
+                // ── Blend fabric over the scene behind ───
+                // opacity = 1  → pure fabric (opaque areas)
+                // opacity = 0  → pure scene  (fully transparent)
+                float3 finalColor = lerp(tintedScene, fabricColor, opacity);
+
+                return float4(finalColor, 1.0);
+            }
+            ENDHLSL
+        }
+
+        // ═══════════════════════════════════════════════
+        // Pass 1 : ShadowCaster
+        // ═══════════════════════════════════════════════
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex ShadowVert
+            #pragma fragment ShadowFrag
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            float3 _LightDirection;
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            Varyings ShadowVert(Attributes IN)
+            {
+                Varyings OUT = (Varyings)0;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+
+                float3 posWS = TransformObjectToWorld(IN.positionOS.xyz);
+                float3 norWS = TransformObjectToWorldNormal(IN.normalOS);
+
+                float4 posCS = TransformWorldToHClip(
+                    ApplyShadowBias(posWS, norWS, _LightDirection));
+
+                #if UNITY_REVERSED_Z
+                    posCS.z = min(posCS.z, UNITY_NEAR_CLIP_VALUE);
+                #else
+                    posCS.z = max(posCS.z, UNITY_NEAR_CLIP_VALUE);
+                #endif
+
+                OUT.positionCS = posCS;
+                return OUT;
+            }
+
+            half4 ShadowFrag(Varyings IN) : SV_TARGET
+            {
+                return 0;
+            }
+            ENDHLSL
+        }
+
+        // ═══════════════════════════════════════════════
+        // Pass 2 : DepthOnly
+        // ═══════════════════════════════════════════════
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+
+            ZWrite On
+            ColorMask R
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex DepthVert
+            #pragma fragment DepthFrag
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            Varyings DepthVert(Attributes IN)
+            {
+                Varyings OUT = (Varyings)0;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                return OUT;
+            }
+
+            half DepthFrag(Varyings IN) : SV_TARGET
+            {
+                return 0;
             }
             ENDHLSL
         }
