@@ -403,7 +403,7 @@ Shader "Custom/FabricPBR"
 
             // Direct lighting remapping: k = (r+1)² / 8  (Disney/UE4)
             // IBL remapping k = r²/2 is intentionally NOT used here.
-            float GeometrySmithSchlickGGX_float(float NoV, float NoL, float roughness)
+            float GeometrySmithSchlickGGX(float NoV, float NoL, float roughness)
             {
                 float r1 = roughness + 1.0;
                 float k  = max((r1 * r1) / 8.0, 0.0001);
@@ -446,6 +446,22 @@ Shader "Custom/FabricPBR"
                 return (float3)(0.25 * clearcoat * d * f * gl);
             }
 
+            // Returns Cook-Torrance specular for a single additional light.
+            // F0 and metallic are passed from the caller so they match the main-light path exactly.
+            float3 CalculateAdditionalLightsPBRSpecular(float3 N, float3 V, float3 L, float3 T,
+                                                        float3 F0, float metallic, float3 albedo, float roughness)
+            {
+                float3 H   = normalize(V + L);
+                float  NoL = saturate(dot(N, L));
+                float  NoV = max(dot(N, V), 0.0);
+                float  VoH = saturate(dot(V, H));
+
+                float  D = DistributionGGXAnisotropic(N, T, H, roughness);
+                float  G = GeometrySmithSchlickGGX(NoV, NoL, roughness);
+                float3 F = FresnelSchlick(VoH, F0);
+                return D * G * F * rcp(max(4.0 * NoV * NoL, 0.0001));
+            }
+
             float4 frag(Varyings IN) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
@@ -461,11 +477,11 @@ Shader "Custom/FabricPBR"
                 // Apply normal map to world-space normal used by all direct/IBL lighting.
                 // Without this, _UseNormalMap only affects CalculateBakedIrradiance, not specular/diffuse.
                 half3 normalTS   = _UseNormalMap > 0
-                    ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, IN.uv))
-                    : half3(0, 0, 1);
+                ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, IN.uv))
+                : half3(0, 0, 1);
                 float3 normalWS  = _UseNormalMap > 0
-                    ? normalize(TransformTangentToWorld(normalTS, half3x3(IN.tangentWS.xyz, IN.bitangentWS.xyz, IN.normalWS.xyz)))
-                    : IN.normalWS.xyz;
+                ? normalize(TransformTangentToWorld(normalTS, half3x3(IN.tangentWS.xyz, IN.bitangentWS.xyz, IN.normalWS.xyz)))
+                : IN.normalWS.xyz;
 
                 // Sample surface maps
                 float3 albedo    = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).rgb;
@@ -504,7 +520,7 @@ Shader "Custom/FabricPBR"
                 float3 fresnelSchlick = FresnelSchlick(voh, F0);
 
                 float distribution = DistributionGGXAnisotropic(normalWS, IN.tangentWS.xyz, h, roughness);
-                float geometry     = GeometrySmithSchlickGGX_float(nov, nol, roughness);
+                float geometry     = GeometrySmithSchlickGGX(nov, nol, roughness);
 
                 // Cook-Torrance: (D * G * F) / (4 * N·V * N·L)  ×  N·L  ×  lightColor  ×  shadow
                 // N·L in numerator and denominator do NOT fully cancel — numerator is irradiance foreshortening,
@@ -525,15 +541,64 @@ Shader "Custom/FabricPBR"
                 diffuse += sheen;
 
                 // Apply nol × light color × shadow once to the combined (diffuse + specular)
-                float3 pbr = (diffuse + specular) * nol * mainLight.shadowAttenuation * mainLight.color;
+                float3 mainLightRadiance = (diffuse + specular) * nol * mainLight.shadowAttenuation * mainLight.color;
 
                 float noh = max(dot(normalWS, h), 0.0);
                 float hol = max(dot(h, mainLight.direction), 0.0);
 
                 float3 clearcoat = CalculateClearcoat(_ClearCoat, 1.0 - _ClearCoatRoughness, noh, hol, nov);
-                pbr += clearcoat * mainLight.shadowAttenuation * mainLight.color;
+                mainLightRadiance += clearcoat * mainLight.shadowAttenuation * mainLight.color;
 
-                return float4(ibl + pbr, 1);
+                // ---------- Additional Lights Radiance Calculation ----------
+                float3 additionalLightsRadiance = 0;
+
+                // Shadow mask lives in lightmap UV space, not screen UV.
+                float4 shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
+
+                uint pixelLightCount = GetAdditionalLightsCount();
+
+                #if USE_CLUSTER_LIGHT_LOOP
+                    InputData inputData = (InputData)0;
+                    inputData.normalizedScreenSpaceUV = screenUV;
+                    inputData.positionWS = IN.positionWS;
+                    inputData.normalWS   = normalWS;
+                #endif
+
+                LIGHT_LOOP_BEGIN(pixelLightCount)
+                    #if !USE_CLUSTER_LIGHT_LOOP
+                        lightIndex = GetPerObjectLightIndex(lightIndex);
+                    #endif
+
+                    // Pass shadowMask (baked), not the main-light shadowCoord.
+                    Light light = GetAdditionalLight(lightIndex, IN.positionWS, shadowMask);
+
+                    // Apply cookie before computing any contribution from this light.
+                    #if defined(LIGHT_COOKIES)
+                        float3 cookieColor = SampleAdditionalLightCookie(lightIndex, IN.positionWS);
+                        light.color *= cookieColor;
+                    #endif
+
+                    float  addNoL  = saturate(dot(normalWS, light.direction));
+                    float3 addH    = normalize(viewDirWS + light.direction);
+                    float  addVoH  = saturate(dot(viewDirWS, addH));
+
+                    // Per-light Fresnel (V·H, same convention as main light)
+                    float3 addF    = FresnelSchlick(addVoH, F0);
+
+                    // Cook-Torrance specular for this light
+                    float3 addSpec = CalculateAdditionalLightsPBRSpecular(
+                        normalWS, viewDirWS, light.direction, IN.tangentWS.xyz,
+                        F0, metallic, albedo, roughness);
+
+                    // Lambert diffuse with energy conservation (same formula as main light)
+                    float3 addDiff = (1.0 - addF) * (1.0 - metallic) * albedo / PI;
+
+                    // Accumulate: (diffuse + specular) × N·L × light radiance
+                    float3 lightRadiance = light.color * light.distanceAttenuation * light.shadowAttenuation;
+                    additionalLightsRadiance += (addDiff + addSpec) * addNoL * lightRadiance;
+                LIGHT_LOOP_END
+
+                return float4(ibl + mainLightRadiance + additionalLightsRadiance, 1);
             }
             ENDHLSL
         }
