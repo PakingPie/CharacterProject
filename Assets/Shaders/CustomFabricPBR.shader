@@ -9,6 +9,7 @@ Shader "Custom/FabricPBR"
         [Header(Normal Map)]
         [Toggle(Use Normal Map)] _UseNormalMap("Use Normal Map", Float) = 0
         _NormalMap("Normal Map", 2D) = "bump" {}
+        _NormalStrength("Normal Strength", Range(0, 2)) = 1.0
 
         [Header(Metallic)]
         _Metallic("Metallic", Range(0,1)) = 0.0
@@ -47,6 +48,21 @@ Shader "Custom/FabricPBR"
         _Sheen("Sheen Intensity", Range(0,1)) = 0.0
         _SheenColor("Sheen Color", Color) = (1,1,1,1)
         _SheenRoughness("Sheen Roughness", Range(0.05,1)) = 0.5
+
+        [Header(Subsurface Transmission)]
+        _Subsurface("Subsurface Intensity", Range(0,1)) = 0.0
+        _SubsurfaceColor("Subsurface Color", Color) = (1, 0.4, 0.25, 1)
+        _TransmissionDistortion("Normal Distortion", Range(0, 1)) = 0.5
+        _TransmissionPower("Transmission Power", Range(1, 16)) = 4.0
+        _AmbientTransmission("Ambient Transmission", Range(0, 1)) = 0.5
+
+        [Header(Diffuse Wrap)]
+        _DiffuseWrap("Diffuse Wrap", Range(0, 0.5)) = 0.0
+
+        [Header(Fabric Fuzz)]
+        _FuzzIntensity("Fuzz Intensity", Range(0, 1)) = 0.0
+        _FuzzColor("Fuzz Color", Color) = (0.5, 0.5, 0.5, 1)
+        _FuzzPower("Fuzz Power", Range(1, 8)) = 3.0
 
         [Header(Clearcoat)]
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
@@ -88,20 +104,17 @@ Shader "Custom/FabricPBR"
             #pragma vertex vert
             #pragma fragment frag
 
-            // Shadow variants
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
 
-            // GI / lightmap variants
             #pragma multi_compile _ LIGHTMAP_ON
             #pragma multi_compile _ DYNAMICLIGHTMAP_ON
             #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
             #pragma multi_compile _ SHADOWS_SHADOWMASK
             #pragma multi_compile _ DIRLIGHTMAP_COMBINED
 
-            // Misc
             #pragma multi_compile _ _SCREEN_SPACE_OCCLUSION
             #pragma multi_compile_fragment _ _LIGHT_COOKIES
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
@@ -139,6 +152,22 @@ Shader "Custom/FabricPBR"
                 float4 _TextureTiling;
                 float4 _MainTex_ST;
                 float  _HeightScale;
+                float  _NormalStrength;
+
+                // Subsurface Transmission
+                float  _Subsurface;
+                float4 _SubsurfaceColor;
+                float  _TransmissionDistortion;
+                float  _TransmissionPower;
+                float  _AmbientTransmission;
+
+                // Wrap Diffuse
+                float  _DiffuseWrap;
+
+                // Fabric Fuzz
+                float  _FuzzIntensity;
+                float4 _FuzzColor;
+                float  _FuzzPower;
 
                 float  _UseReflectiveProbe;
                 float  _UseCustomCubemap;
@@ -170,9 +199,9 @@ Shader "Custom/FabricPBR"
                 float4 positionCS  : SV_POSITION;
                 float2 uv          : TEXCOORD0;
                 float3 positionWS  : TEXCOORD1;
-                float4 normalWS    : TEXCOORD2;   // xyz: normal,    w: viewDir.x
-                float4 tangentWS   : TEXCOORD3;   // xyz: tangent,   w: viewDir.y
-                float4 bitangentWS : TEXCOORD4;   // xyz: bitangent, w: viewDir.z
+                float4 normalWS    : TEXCOORD2;
+                float4 tangentWS   : TEXCOORD3;
+                float4 bitangentWS : TEXCOORD4;
 
                 #ifdef _ADDITIONAL_LIGHTS_VERTEX
                     half3 vertexLighting : TEXCOORD5;
@@ -249,8 +278,8 @@ Shader "Custom/FabricPBR"
             void InitializeBakedGIData(Varyings IN, inout InputData inputData)
             {
                 #if defined(DYNAMICLIGHTMAP_ON)
-                    inputData.bakedGI   = SAMPLE_GI(IN.staticLightmapUV, IN.dynamicLightmapUV,
-                                                    IN.vertexSH, inputData.normalWS);
+                    inputData.bakedGI    = SAMPLE_GI(IN.staticLightmapUV, IN.dynamicLightmapUV,
+                                                     IN.vertexSH, inputData.normalWS);
                     inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
                 #elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
                     inputData.bakedGI = SAMPLE_GI(IN.vertexSH,
@@ -283,7 +312,7 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // Parallax (single-step offset)
+            // Parallax
             // ──────────────────────────────────────────────
             float2 ParallaxOffset(float2 uv, float3 viewDirTS)
             {
@@ -292,7 +321,7 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // IBL (Image-Based Lighting)
+            // IBL
             // ──────────────────────────────────────────────
             float3 CalculateIBL(
                 float3 normalWS, float3 viewDirWS, float3 positionWS, float2 screenUV,
@@ -321,7 +350,6 @@ Shader "Custom/FabricPBR"
                     float3 prefiltered = GlossyEnvironmentReflection(
                         R, positionWS, roughness, 1.0, screenUV);
                     envSpec = prefiltered * (kS * brdf.x + brdf.y);
-
                     envDiff = kD * albedo * bakedIrradiance;
                 }
 
@@ -331,8 +359,6 @@ Shader "Custom/FabricPBR"
             // ──────────────────────────────────────────────
             // BRDF Utilities
             // ──────────────────────────────────────────────
-
-            // Analytical split-sum LUT approximation (Karis / UE4)
             float2 EnvBRDFApprox(float roughness, float NoV)
             {
                 const float4 c0 = float4(-1.0, -0.0275, -0.572,  0.022);
@@ -373,7 +399,7 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // Smith-Schlick-GGX Geometry (direct-lighting k)
+            // Smith-Schlick-GGX Geometry
             // ──────────────────────────────────────────────
             float GeometrySmithSchlickGGX(float NoV, float NoL, float roughness)
             {
@@ -385,28 +411,10 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // Fabric Sheen: Estevez-Kulla "Charlie" NDF
-            //   + Neubelt-Pettineo Visibility (clamped)
-            //
-            // The overbright-on-dark-side bug was caused by
-            // two issues in the visibility term:
-            //   1) When NoL and NoV are both near zero (deep
-            //      terminator), the denominator
-            //      (NoL + NoV - NoL*NoV) approaches zero,
-            //      causing V to spike to infinity.
-            //   2) CharlieD peaks when NoH is LOW (sin-power
-            //      distribution), which is exactly the
-            //      terminator geometry. So D is at its maximum
-            //      where V is also at its maximum.
-            //
-            // Fix: floor the V denominator at 0.1 so the
-            // maximum V = 1/(4*0.1) = 2.5, and additionally
-            // cap D*V at 4.0 as an absolute safety net.
+            // Fabric Sheen: Charlie NDF + Neubelt V (clamped)
             // ──────────────────────────────────────────────
             float CharlieD(float sheenRoughness, float NoH)
             {
-                // Floor at 0.07 prevents extreme NDF spikes.
-                // At roughness 0.001, invR = 1000 and D can exceed 150.
                 sheenRoughness = max(sheenRoughness, 0.07);
                 float invR  = rcp(sheenRoughness);
                 float cos2h = NoH * NoH;
@@ -414,14 +422,11 @@ Shader "Custom/FabricPBR"
                 return (2.0 + invR) * pow(sin2h, invR * 0.5) / (2.0 * PI);
             }
 
-            // Neubelt-Pettineo cloth visibility with safe denominator floor.
             float ClothV(float NoV, float NoL)
             {
                 return rcp(4.0 * max(NoL + NoV - NoL * NoV, 0.1));
             }
 
-            // Full fabric sheen lobe.
-            // Returns BRDF value; caller multiplies by N·L × radiance.
             float3 EvaluateSheen(float3 sheenColor, float sheenIntensity,
                                  float sheenRoughness,
                                  float NoH, float NoV, float NoL)
@@ -429,42 +434,32 @@ Shader "Custom/FabricPBR"
                 if (sheenIntensity <= 0.0) return 0.0;
                 float D  = CharlieD(sheenRoughness, NoH);
                 float V  = ClothV(NoV, NoL);
-                float DV = min(D * V, 4.0);           // absolute cap
+                float DV = min(D * V, 4.0);
                 return sheenColor * sheenIntensity * DV;
             }
 
-            // Approximate directional albedo of Charlie sheen
-            // for energy compensation on the base diffuse.
             float SheenDirectionalAlbedo(float sheenIntensity, float sheenRoughness)
             {
                 return sheenIntensity * saturate(0.15 * sheenRoughness + 0.05);
             }
 
             // ──────────────────────────────────────────────
-            // Clearcoat: GTR1 NDF + Smith-GGX Geometry
-            //
-            // Fixed: original was missing G1(NoL) and the
-            // N·L foreshortening factor at the call site.
+            // Clearcoat
             // ──────────────────────────────────────────────
             float3 EvaluateClearcoat(float clearcoat, float smoothness,
                                      float NoH, float HoL, float NoV, float NoL)
             {
                 if (clearcoat <= 0.0) return 0.0;
 
-                // Remap smoothness [0,1] → GTR1 alpha [0.1, 0.001]
                 float alpha   = lerp(0.1, 0.001, smoothness);
                 float alphaSq = alpha * alpha;
 
-                // GTR1 (Berry / Disney) NDF
                 float d = (alphaSq - 1.0)
                         * rcp(PI * log(alphaSq)
                               * (1.0 + (alphaSq - 1.0) * NoH * NoH));
 
-                // Fresnel: dielectric F0 = 0.04
                 float f = 0.04 + 0.96 * pow(saturate(1.0 - HoL), 5.0);
 
-                // Smith-GGX geometry at fixed roughness 0.25
-                // BOTH G1(V) and G1(L) — the original was missing G1(L).
                 float ccRoughSq = 0.25 * 0.25;
                 float gv = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoV * NoV));
                 float gl = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoL * NoL));
@@ -473,7 +468,7 @@ Shader "Custom/FabricPBR"
             }
 
             // ──────────────────────────────────────────────
-            // Cook-Torrance Specular (factored out for reuse)
+            // Cook-Torrance Specular (reusable)
             // ──────────────────────────────────────────────
             float3 EvaluateSpecular(float3 N, float3 V, float3 L, float3 T,
                                     float3 F0val, float roughness, float anisotropy)
@@ -487,6 +482,35 @@ Shader "Custom/FabricPBR"
                 float  G = GeometrySmithSchlickGGX(NoV, NoL, roughness);
                 float3 F = FresnelSchlick(VoH, F0val);
                 return D * G * F * rcp(max(4.0 * NoV * NoL, 0.0001));
+            }
+
+            // ──────────────────────────────────────────────
+            // ★ NEW: Subsurface Transmission
+            //
+            // Simulates light passing through thin fabric.
+            // Uses a distorted back-lit vector to create a
+            // view-dependent glow from behind.  Shadow is
+            // intentionally NOT applied — the surface is
+            // in its own shadow from the light's POV, but
+            // real thin fabric still transmits that light.
+            // ──────────────────────────────────────────────
+            float3 EvaluateTransmission(
+                float3 N, float3 V, float3 L,
+                float3 lightColor,
+                float3 albedo,
+                float  subsurface, float3 subsurfaceColor,
+                float  distortion, float  power)
+            {
+                if (subsurface <= 0.0) return 0.0;
+
+                // Distort the light direction by the surface normal
+                // so the transmission lobe is spread and view-dependent
+                float3 transLight = normalize(L + N * distortion);
+                float  VdotNegTL = pow(saturate(dot(V, -transLight)), power);
+
+                // Modulate by albedo so dark fabric transmits less
+                return subsurface * subsurfaceColor * albedo
+                     * VdotNegTL * lightColor;
             }
 
             // ──────────────────────────────────────────────
@@ -534,21 +558,31 @@ Shader "Custom/FabricPBR"
                     ? SAMPLE_TEXTURE2D(_AnisotropyMap, sampler_AnisotropyMap, uv).r * _Anisotropy
                     : _Anisotropy;
 
-                // ── Normal ───────────────────────────────
-                half3 normalTS = _UseNormalMap > 0
-                    ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv))
-                    : half3(0, 0, 1);
-                float3 normalWS = _UseNormalMap > 0
-                    ? normalize(TransformTangentToWorld(normalTS,
-                          half3x3(IN.tangentWS.xyz,
-                                  IN.bitangentWS.xyz,
-                                  IN.normalWS.xyz)))
-                    : normalize(IN.normalWS.xyz);
+                // ── Normal (★ with strength control) ─────
+                half3 normalTS = half3(0, 0, 1);
+                if (_UseNormalMap > 0)
+                {
+                    normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv));
+                    normalTS.xy *= _NormalStrength;
+                    normalTS = normalize(normalTS);
+                }
+
+                half3x3 tbnMatrix = half3x3(
+                    IN.tangentWS.xyz,
+                    IN.bitangentWS.xyz,
+                    IN.normalWS.xyz);
+
+                float3 normalWS = normalize(TransformTangentToWorld(normalTS, tbnMatrix));
+
+                // ★ Re-orthogonalize tangent against the
+                //   perturbed normal so anisotropy direction
+                //   stays in the tangent plane.
+                float3 tangentWS = normalize(IN.tangentWS.xyz
+                    - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
                 float nov = max(dot(normalWS, viewDirWS), 0.0001);
 
-                // ── F0 (specular tint applied BEFORE Fresnel
-                //    for correct energy conservation) ─────
+                // ── F0 ───────────────────────────────────
                 float  lum        = dot(_BaseColor.rgb, float3(0.3, 0.6, 0.1));
                 float3 albedoTint = lum > 0 ? _BaseColor.rgb * rcp(lum) : (float3)1;
                 float3 specTint   = lerp((float3)1, albedoTint, _SpecularTint)
@@ -559,7 +593,7 @@ Shader "Custom/FabricPBR"
                 float3 kS = FresnelSchlickRoughness(nov, F0, roughness);
                 float3 kD = (1.0 - kS) * (1.0 - metallic);
 
-                // ── Build InputData for Baked GI ─────────
+                // ── InputData for Baked GI ───────────────
                 InputData inputData = (InputData)0;
                 inputData.positionWS              = IN.positionWS;
                 inputData.positionCS              = IN.positionCS;
@@ -583,7 +617,7 @@ Shader "Custom/FabricPBR"
 
                 InitializeBakedGIData(IN, inputData);
 
-                float2 ssao      = SampleSSAO(screenUV);
+                float2 ssao       = SampleSSAO(screenUV);
                 float  indirectAO = min(ssao.y, ao);
                 float3 bakedIrradiance = inputData.bakedGI * indirectAO;
 
@@ -598,14 +632,36 @@ Shader "Custom/FabricPBR"
                     brdf, envLOD,
                     bakedIrradiance);
 
-                // AO only on indirect/IBL (physically correct)
                 ibl *= ao;
+
+                // ── ★ Fabric Fuzz (Fresnel rim from
+                //      scattered ambient light in fibers) ─
+                if (_FuzzIntensity > 0)
+                {
+                    float fuzzFresnel = pow(1.0 - nov, _FuzzPower);
+                    float3 fuzz = _FuzzColor.rgb * _FuzzIntensity * fuzzFresnel;
+                    // Modulate by ambient so it responds to environment
+                    float3 ambientLevel = max(bakedIrradiance, 0.05);
+                    ibl += fuzz * ambientLevel * ao;
+                }
+
+                // ── ★ Indirect (ambient) Transmission ────
+                //    Sample SH from the back-face normal to
+                //    approximate ambient light leaking through
+                if (_Subsurface > 0 && _AmbientTransmission > 0)
+                {
+                    float3 backIrradiance = max(0, SampleSH(-normalWS));
+                    float3 indirectTrans  = _Subsurface * _AmbientTransmission
+                                          * _SubsurfaceColor.rgb * albedo
+                                          * backIrradiance * rcp(PI);
+                    ibl += indirectTrans * ao;
+                }
 
                 // ── Emission ─────────────────────────────
                 float3 emission = _EnableEmission > 0
                     ? _EmissionColor.rgb : (float3)0;
 
-                // ── Sheen energy compensation factor ─────
+                // ── Sheen energy compensation ────────────
                 float sheenAlbedo = SheenDirectionalAlbedo(_Sheen, _SheenRoughness);
 
                 // ══════════════════════════════════════════
@@ -614,7 +670,13 @@ Shader "Custom/FabricPBR"
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 Light  mainLight   = GetMainLight(shadowCoord);
 
-                float  nol = saturate(dot(normalWS, mainLight.direction));
+                float  rawNdotL = dot(normalWS, mainLight.direction);
+                float  nol      = saturate(rawNdotL);
+
+                // ★ Wrap diffuse: softer terminator for fabric
+                float  nolWrap  = saturate(
+                    (rawNdotL + _DiffuseWrap) / (1.0 + _DiffuseWrap));
+
                 float3 h   = normalize(viewDirWS + mainLight.direction);
                 float  noh = max(dot(normalWS, h), 0.0);
                 float  voh = max(dot(viewDirWS, h), 0.0);
@@ -623,7 +685,7 @@ Shader "Custom/FabricPBR"
                 // Cook-Torrance specular
                 float3 F_direct = FresnelSchlick(voh, F0);
                 float  D_direct = DistributionGGXAnisotropic(
-                    normalWS, IN.tangentWS.xyz, h, roughness, anisotropy);
+                    normalWS, tangentWS, h, roughness, anisotropy);
                 float  G_direct = GeometrySmithSchlickGGX(nov, nol, roughness);
                 float3 specular = (D_direct * G_direct * F_direct)
                                 / max(4.0 * nov * nol, 0.001);
@@ -632,20 +694,29 @@ Shader "Custom/FabricPBR"
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
                                * (1.0 - sheenAlbedo) * albedo / PI;
 
-                // Fabric sheen (Charlie NDF)
+                // Fabric sheen
                 float3 sheen = EvaluateSheen(
                     _SheenColor.rgb, _Sheen, _SheenRoughness,
                     noh, nov, nol);
 
-                // Clearcoat (separate lobe)
+                // Clearcoat
                 float3 clearcoat = EvaluateClearcoat(
                     _ClearCoat, 1.0 - _ClearCoatRoughness,
                     noh, hol, nov, nol);
 
-                // Combine: ALL lobes × N·L × radiance × shadow
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
-                float3 mainLighting = (diffuse + specular + sheen + clearcoat)
-                                    * nol * mainRadiance;
+
+                // ★ Diffuse uses wrapped NoL; specular lobes use sharp NoL
+                float3 mainLighting = diffuse * nolWrap * mainRadiance
+                                    + (specular + sheen + clearcoat) * nol * mainRadiance;
+
+                // ★ Direct transmission (no shadow — light passes through)
+                mainLighting += EvaluateTransmission(
+                    normalWS, viewDirWS, mainLight.direction,
+                    mainLight.color,
+                    albedo,
+                    _Subsurface, _SubsurfaceColor.rgb,
+                    _TransmissionDistortion, _TransmissionPower);
 
                 // ══════════════════════════════════════════
                 //  ADDITIONAL LIGHTS
@@ -667,7 +738,11 @@ Shader "Custom/FabricPBR"
                             lightIndex, IN.positionWS);
                     #endif
 
-                    float  aNoL = saturate(dot(normalWS, light.direction));
+                    float  aRawNdotL = dot(normalWS, light.direction);
+                    float  aNoL      = saturate(aRawNdotL);
+                    float  aNoLWrap  = saturate(
+                        (aRawNdotL + _DiffuseWrap) / (1.0 + _DiffuseWrap));
+
                     float3 aH   = normalize(viewDirWS + light.direction);
                     float  aNoH = max(dot(normalWS, aH), 0.0);
                     float  aVoH = saturate(dot(viewDirWS, aH));
@@ -675,21 +750,17 @@ Shader "Custom/FabricPBR"
 
                     float3 aF = FresnelSchlick(aVoH, F0);
 
-                    // Cook-Torrance specular
                     float3 aSpec = EvaluateSpecular(
                         normalWS, viewDirWS, light.direction,
-                        IN.tangentWS.xyz, F0, roughness, anisotropy);
+                        tangentWS, F0, roughness, anisotropy);
 
-                    // Lambert diffuse with sheen energy compensation
                     float3 aDiff = (1.0 - aF) * (1.0 - metallic)
                                  * (1.0 - sheenAlbedo) * albedo / PI;
 
-                    // Fabric sheen
                     float3 aSheen = EvaluateSheen(
                         _SheenColor.rgb, _Sheen, _SheenRoughness,
                         aNoH, nov, aNoL);
 
-                    // Clearcoat
                     float3 aCC = EvaluateClearcoat(
                         _ClearCoat, 1.0 - _ClearCoatRoughness,
                         aNoH, aHoL, nov, aNoL);
@@ -697,8 +768,17 @@ Shader "Custom/FabricPBR"
                     float3 lightRad = light.color
                                     * light.distanceAttenuation
                                     * light.shadowAttenuation;
-                    addLighting += (aDiff + aSpec + aSheen + aCC)
-                                 * aNoL * lightRad;
+
+                    addLighting += aDiff * aNoLWrap * lightRad
+                                 + (aSpec + aSheen + aCC) * aNoL * lightRad;
+
+                    // Transmission for additional lights
+                    addLighting += EvaluateTransmission(
+                        normalWS, viewDirWS, light.direction,
+                        light.color * light.distanceAttenuation,
+                        albedo,
+                        _Subsurface, _SubsurfaceColor.rgb,
+                        _TransmissionDistortion, _TransmissionPower);
                 LIGHT_LOOP_END
 
                 // ══════════════════════════════════════════
@@ -713,6 +793,5 @@ Shader "Custom/FabricPBR"
         }
     }
 
-    // Provides ShadowCaster, DepthOnly, DepthNormals, Meta passes
     Fallback "Universal Render Pipeline/Lit"
 }
