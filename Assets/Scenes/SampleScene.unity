@@ -497,7 +497,7 @@ Light:
   serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 2
+  m_Intensity: 4
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -717,12 +717,20 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -287996243237646073, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -287996243237646073, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: f69f2244533ec9c4bb1c5f7779a711c9, type: 2}
     - target: {fileID: 919132149155446097, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
       propertyPath: m_Name
       value: UnityChan_Leg
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6038522627578112058, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
       propertyPath: m_IsActive
@@ -974,7 +982,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!215 &1310922992
 ReflectionProbe:
   m_ObjectHideFlags: 0
@@ -1003,7 +1011,7 @@ ReflectionProbe:
   m_IntensityMultiplier: 1
   m_BlendDistance: 1
   m_HDR: 1
-  m_BoxProjection: 0
+  m_BoxProjection: 1
   m_RenderDynamicObjects: 0
   m_UseOcclusionCulling: 1
   m_Importance: 1

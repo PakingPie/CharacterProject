@@ -26,10 +26,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
   m_InvalidKeywords:
-  - Use AO Map
-  - Use Custom Cubemap
-  - Use Metallic Map
-  - Use Normal Map
+  - Use Reflective Probe
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -107,15 +104,15 @@ Material:
     - _Subsurface: 0
     - _TransmissionDistortion: 1
     - _TransmissionPower: 1
-    - _UseAOMap: 1
+    - _UseAOMap: 0
     - _UseAnisotropyMap: 0
-    - _UseCustomCubemap: 1
+    - _UseCustomCubemap: 0
     - _UseHeightMap: 0
-    - _UseMetallicMap: 1
-    - _UseNormalMap: 1
+    - _UseMetallicMap: 0
+    - _UseNormalMap: 0
     - _UseOpacityMap: 0
     - _UseProceduralWeave: 0
-    - _UseReflectiveProbe: 0
+    - _UseReflectiveProbe: 1
     - _UseRoughnessMap: 0
     - _UseVertexAlpha: 0
     - _WeaveDarken: 0.506
