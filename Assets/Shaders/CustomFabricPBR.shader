@@ -80,6 +80,10 @@ Shader "Custom/FabricPBR"
         _WeaveRoughnessVar("Thread Roughness Variation", Range(0, 0.3)) = 0.1
         _WeaveDarken("Thread Edge Darkening", Range(0, 1)) = 0.2
 
+        // ★ NEW — Anti-moiré fade control
+        _WeaveFadeStart("Moire Fade Start (cells/px)", Range(0.01, 1.0)) = 0.2
+        _WeaveFadeEnd("Moire Fade End (cells/px)", Range(0.1, 2.0)) = 0.7
+
         [Header(Clearcoat)]
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
         _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
@@ -208,6 +212,10 @@ Shader "Custom/FabricPBR"
                 float  _WeaveNormalStrength;
                 float  _WeaveRoughnessVar;
                 float  _WeaveDarken;
+
+                // ★ NEW — Anti-moiré fade
+                float  _WeaveFadeStart;
+                float  _WeaveFadeEnd;
 
                 float  _Opacity;
                 float  _UseOpacityMap;
@@ -554,8 +562,6 @@ Shader "Custom/FabricPBR"
 
             // ══════════════════════════════════════════════
             // ★ PROCEDURAL WEAVE FUNCTIONS
-            //   Ported from FabricPattern.shader
-            //   2-octave noise for real-time performance
             // ══════════════════════════════════════════════
 
             void WeaveHash_uint(uint2 v, out uint o)
@@ -591,7 +597,6 @@ Shader "Custom/FabricPBR"
                             lerp(r2, r3, f.x), f.y);
             }
 
-            // ★ 2-octave FBM — saves ~33% ALU vs 3-octave original
             float WeaveNoise2Oct(float2 UV, float Scale)
             {
                 float noise = 0.0;
@@ -600,26 +605,46 @@ Shader "Custom/FabricPBR"
                 return noise;
             }
 
-            // ★ Returns weave height: 0 at thread center, ~0.5 at gap
+            // ★ FIX (Layer B): Band-limited weave height
+            //   Replaced floor(fmod()) square wave with
+            //   cosine-based smooth checkerboard.
             float WeaveHeight(float2 scaledUV)
             {
-                float vertPattern = floor(fmod(scaledUV.x, 2.0));
-                float horiPattern = floor(fmod(scaledUV.y, 2.0));
-                float pattern = vertPattern * horiPattern
-                              + (1.0 - vertPattern) * (1.0 - horiPattern);
+                // ★ Band-limited checkerboard via cosine
+                //   cos(x*PI) oscillates smoothly over period-2,
+                //   (0.5 + 0.5*cos) maps to [0,1] with no
+                //   infinite-frequency content.
+                float vertWave = 0.5 + 0.5 * cos(scaledUV.x * PI);
+                float horiWave = 0.5 + 0.5 * cos(scaledUV.y * PI);
 
-                float vertNoise = WeaveNoise2Oct(scaledUV * float2(10, 1), _WeaveNoiseScale);
+                // Checkerboard: same-parity cells → 1,
+                // different-parity → 0 (smooth blend at edges)
+                float pattern = vertWave * horiWave
+                              + (1.0 - vertWave) * (1.0 - horiWave);
+
+                // Vertical thread distortion (unchanged)
+                float vertNoise = WeaveNoise2Oct(
+                    scaledUV * float2(10, 1), _WeaveNoiseScale);
                 vertNoise = (vertNoise * 2.0 - 1.0) * _WeaveFabricIntensity;
                 float2 vertNoiseUV = scaledUV + (float2)vertNoise;
-                vertNoiseUV.x = abs(vertNoiseUV.x - round(vertNoiseUV.x));
 
-                float horiNoise = WeaveNoise2Oct(scaledUV * float2(1, 10), _WeaveNoiseScale);
+                // ★ Smoother cell-distance: cosine arch replaces
+                //   triangle wave abs(x - round(x)).
+                //   Range [0, 0.5], C∞ continuous.
+                float vFrac = vertNoiseUV.x - round(vertNoiseUV.x);
+                float vertDist = 0.25 * (1.0 - cos(2.0 * PI * vFrac));
+
+                // Horizontal thread distortion (unchanged)
+                float horiNoise = WeaveNoise2Oct(
+                    scaledUV * float2(1, 10), _WeaveNoiseScale);
                 horiNoise = (horiNoise * 2.0 - 1.0) * _WeaveFabricIntensity;
                 float2 horiNoiseUV = scaledUV + (float2)horiNoise;
-                horiNoiseUV.y = abs(horiNoiseUV.y - round(horiNoiseUV.y));
 
-                return max(pattern * vertNoiseUV.x,
-                           (1.0 - pattern) * horiNoiseUV.y);
+                float hFrac = horiNoiseUV.y - round(horiNoiseUV.y);
+                float horiDist = 0.25 * (1.0 - cos(2.0 * PI * hFrac));
+
+                return max(pattern * vertDist,
+                           (1.0 - pattern) * horiDist);
             }
 
             // ──────────────────────────────────────────────
@@ -678,51 +703,76 @@ Shader "Custom/FabricPBR"
 
                 // ══════════════════════════════════════════
                 // ★ PROCEDURAL WEAVE INTEGRATION
-                //
-                //   Outputs:
-                //     weaveThreadMask — 1 on threads, 0 in gaps
-                //     normalTS        — perturbed with weave bumps
-                //     albedo          — darkened at thread edges
-                //     roughness       — varied: smoother on threads,
-                //                       rougher in gaps
+                //   with Layer A (pixel-footprint fade)
+                //   and Layer B (band-limited wave — in
+                //   WeaveHeight above)
                 // ══════════════════════════════════════════
                 float weaveThreadMask = 1.0;
 
                 if (_UseProceduralWeave > 0)
                 {
-                    // Scale UV: tiling × even thread count
+                    // Scale UV
                     float2 weaveUV = uv * _WeaveUVTiling;
-                    float2 scaledWeaveUV = weaveUV
-                        * (ceil(_NumberOfThreads * 0.5) * 2.0);
+                    float  evenThreads = ceil(_NumberOfThreads * 0.5) * 2.0;
+                    float2 scaledWeaveUV = weaveUV * evenThreads;
 
-                    // ★ Weave height: 0 at thread center,
-                    //   ~0.5 at cell boundary (gap)
+                    // ★ NEW (Layer A): Measure pixel footprint
+                    //   in weave-cell space.  A value of 1.0
+                    //   means one pixel covers one full cell.
+                    float2 weavePixelSize = fwidth(scaledWeaveUV);
+                    float  weaveCoverage  = max(weavePixelSize.x,
+                                                weavePixelSize.y);
+
+                    // ★ Bump fades first — it's the worst
+                    //   moiré offender.  Goes to 0 quickly.
+                    float bumpFade = 1.0 - smoothstep(
+                        _WeaveFadeStart * 0.5,
+                        _WeaveFadeEnd  * 0.65,
+                        weaveCoverage);
+
+                    // ★ Color / roughness / gap fade —
+                    //   slightly more forgiving range.
+                    float detailFade = 1.0 - smoothstep(
+                        _WeaveFadeStart,
+                        _WeaveFadeEnd,
+                        weaveCoverage);
+
+                    // Weave height
                     float weaveH = WeaveHeight(scaledWeaveUV);
 
-                    // ★ Thread mask via soft threshold
+                    // Thread mask (soft threshold)
                     weaveThreadMask = 1.0 - smoothstep(
                         _GapThreshold - _GapSoftness,
                         _GapThreshold + _GapSoftness,
                         weaveH);
 
-                    // ★ Bump normal from screen-space height
-                    //   derivatives (UDN blend onto base normal)
+                    // ★ Fade thread mask toward 1.0 (solid)
+                    //   at distance — gaps disappear smoothly
+                    weaveThreadMask = lerp(1.0, weaveThreadMask,
+                                           detailFade);
+
+                    // ★ Bump normal: scale by bumpFade so
+                    //   derivatives vanish before they alias
                     float dhdx = ddx(weaveH);
                     float dhdy = ddy(weaveH);
                     normalTS.xy += float2(-dhdx, -dhdy)
-                                 * _WeaveNormalStrength;
+                                 * _WeaveNormalStrength
+                                 * bumpFade;           // ★ fade
                     normalTS = normalize(normalTS);
 
-                    // ★ Thread edge darkening (cylindrical
-                    //   self-shadow approximation)
+                    // ★ Thread edge darkening: lerp toward
+                    //   no-darkening (1.0) at distance
                     float threadProfile = saturate(
                         1.0 - weaveH * 2.5);
-                    albedo *= lerp(1.0 - _WeaveDarken,
-                                   1.0,
-                                   threadProfile);
+                    float darkening = lerp(1.0 - _WeaveDarken,
+                                           1.0,
+                                           threadProfile);
+                    albedo *= lerp(1.0, darkening,
+                                   detailFade);        // ★ fade
 
-                    // ★ Roughness: thread centers smoother,
-                    //   gaps / edges rougher
+                    // ★ Roughness variation: weaveThreadMask
+                    //   is already faded toward 1.0, so
+                    //   (1 - mask) → 0 at distance naturally
                     roughness += _WeaveRoughnessVar
                                * (1.0 - weaveThreadMask);
                     roughness = clamp(roughness, 0.045, 1.0);
@@ -751,15 +801,14 @@ Shader "Custom/FabricPBR"
                 if (_UseVertexAlpha > 0)
                     opacity *= IN.vertexColor.a;
 
-                // ★ Weave gap transparency: gaps let skin
-                //   show through, threads stay at base opacity
+                // ★ Weave gap transparency (weaveThreadMask
+                //   already faded — gaps vanish at distance)
                 if (_UseProceduralWeave > 0)
                 {
                     opacity *= lerp(_GapOpacity, 1.0, weaveThreadMask);
                 }
 
-                // Fresnel edge opacity: fabric looks more
-                // opaque at grazing angles (more fiber layers)
+                // Fresnel edge opacity
                 if (_FresnelOpacityStrength > 0)
                 {
                     float edgeOpacity = pow(1.0 - nov, _FresnelOpacityPower)
@@ -770,7 +819,6 @@ Shader "Custom/FabricPBR"
                 // ── Sample scene behind (the leg skin) ───
                 float3 sceneColor = SampleSceneColor(screenUV);
 
-                // Tint the see-through by fabric color
                 float3 tintedScene = lerp(sceneColor,
                                           sceneColor * albedo * 2.0,
                                           _SeeThruTint);
@@ -964,7 +1012,6 @@ Shader "Custom/FabricPBR"
                 float3 fabricColor = ibl + mainLighting + addLighting + emission;
                 fabricColor = MixFog(fabricColor, IN.fogFactor);
 
-                // ── Blend fabric over the scene behind ───
                 float3 finalColor = lerp(tintedScene, fabricColor, opacity);
 
                 return float4(finalColor, 1.0);
