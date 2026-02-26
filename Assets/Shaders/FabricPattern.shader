@@ -151,25 +151,10 @@ Shader "Custom/FabricPattern"
                 return max(pattern * vertNoiseUV.x, (1 - pattern) * horiNoiseUV.y);
             }
 
-            // Sobel filter over the fabric height field to derive a tangent-space normal
             float3 NormalFromHeight(float2 scaledUV, float strength)
             {
-                // texelSize in scaledUV space; ~1/20th of a thread width gives good edge detection
-                float texelSize = 0.05;
-
-                float h00 = FabricHeight(scaledUV + float2(-texelSize, -texelSize));
-                float h10 = FabricHeight(scaledUV + float2( 0,         -texelSize));
-                float h20 = FabricHeight(scaledUV + float2( texelSize, -texelSize));
-                float h01 = FabricHeight(scaledUV + float2(-texelSize,  0        ));
-                float h21 = FabricHeight(scaledUV + float2( texelSize,  0        ));
-                float h02 = FabricHeight(scaledUV + float2(-texelSize,  texelSize));
-                float h12 = FabricHeight(scaledUV + float2( 0,          texelSize));
-                float h22 = FabricHeight(scaledUV + float2( texelSize,  texelSize));
-
-                float sobelX = h00 - h20 + 2.0 * h01 - 2.0 * h21 + h02 - h22;
-                float sobelY = h00 + 2.0 * h10 + h20 - h02 - 2.0 * h12 - h22;
-
-                return normalize(float3(-sobelX * strength, -sobelY * strength, 1.0));
+                float height = FabricHeight(scaledUV);
+                return normalize(float3(-ddx(height) * strength, -ddy(height) * strength, 1.0));
             }
 
             float4 frag(Varyings IN) : SV_Target
