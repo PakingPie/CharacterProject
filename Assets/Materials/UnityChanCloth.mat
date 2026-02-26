@@ -81,27 +81,31 @@ Material:
     m_Floats:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0
-    - _Anisotropy: 0.3
-    - _ClearCoat: 0
-    - _ClearCoatRoughness: 0
+    - _Anisotropy: 0.4
+    - _ClearCoat: 1
+    - _ClearCoatRoughness: 0.2
     - _DiffuseWrap: 0.15
     - _EnableEmission: 0
-    - _F0: 0.05
+    - _F0: 0.04
     - _FresnelOpacityPower: 3
-    - _FresnelOpacityStrength: 0
-    - _FuzzIntensity: 0.2
-    - _FuzzPower: 3
+    - _FresnelOpacityStrength: 1
+    - _FuzzIntensity: 0.5
+    - _FuzzPower: 4
+    - _GapOpacity: 0.2
+    - _GapSoftness: 0.2
+    - _GapThreshold: 0.4
     - _HeightScale: 0
     - _Metallic: 0
-    - _NormalStrength: 0.5
-    - _Opacity: 0.95
+    - _NormalStrength: 1
+    - _NumberOfThreads: 200
+    - _Opacity: 0.9
     - _Roughness: 0.4
-    - _SeeThruTint: 0.3
+    - _SeeThruTint: 0.65
     - _Sheen: 0.6
     - _SheenRoughness: 0.4
     - _SpecularTint: 0
     - _Subsurface: 0
-    - _TransmissionDistortion: 0
+    - _TransmissionDistortion: 1
     - _TransmissionPower: 1
     - _UseAOMap: 1
     - _UseAnisotropyMap: 0
@@ -110,13 +114,22 @@ Material:
     - _UseMetallicMap: 1
     - _UseNormalMap: 1
     - _UseOpacityMap: 0
+    - _UseProceduralWeave: 0
     - _UseReflectiveProbe: 0
     - _UseRoughnessMap: 0
     - _UseVertexAlpha: 0
+    - _WeaveDarken: 0.506
+    - _WeaveFabricIntensity: 0.2
+    - _WeaveFadeEnd: 1.2
+    - _WeaveFadeStart: 0.4
+    - _WeaveNoiseScale: 20
+    - _WeaveNormalStrength: 1
+    - _WeaveRoughnessVar: 0.1
+    - _WeaveUVTiling: 1
     m_Colors:
     - _BaseColor: {r: 0.3207547, g: 0.3207547, b: 0.3207547, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _FuzzColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+    - _FuzzColor: {r: 1, g: 1, b: 1, a: 1}
     - _SheenColor: {r: 0.4188679, g: 0.4188679, b: 0.4188679, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
