@@ -117,6 +117,7 @@ Shader "Custom/FabricPBR"
 
         [Header(Transparency)]
         _Opacity("Base Opacity", Range(0, 1)) = 1.0
+        [Toggle] _ForwardZWrite("Forward Depth Write (Transparent)", Float) = 0
         [Toggle(Use Opacity Map)] _UseOpacityMap("Use Opacity Map", Float) = 0
         _OpacityMap("Opacity Map (R = opaque)", 2D) = "white" {}
         [Toggle(Use Vertex Alpha)] _UseVertexAlpha("Use Vertex Color Alpha", Float) = 0
@@ -146,8 +147,8 @@ Shader "Custom/FabricPBR"
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
 
-            Cull Off
-            ZWrite On
+            Cull Back
+            ZWrite [_ForwardZWrite]
             ZTest LEqual
 
             HLSLPROGRAM
@@ -256,6 +257,7 @@ Shader "Custom/FabricPBR"
                 float  _DenierMax;
 
                 float  _Opacity;
+                float  _ForwardZWrite;
                 float  _UseOpacityMap;
                 float  _UseVertexAlpha;
                 float  _FresnelOpacityPower;
@@ -1231,7 +1233,7 @@ Shader "Custom/FabricPBR"
 
                 float3 finalColor = lerp(tintedScene, fabricColor, opacity);
 
-                return float4(finalColor, 1.0);
+                return float4(finalColor, saturate(opacity));
             }
             ENDHLSL
         }
@@ -1312,7 +1314,7 @@ Shader "Custom/FabricPBR"
             Tags { "LightMode" = "DepthOnly" }
 
             ZWrite On
-            ColorMask R
+            ColorMask 0
             Cull Back
 
             HLSLPROGRAM
