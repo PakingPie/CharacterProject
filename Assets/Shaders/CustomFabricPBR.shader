@@ -105,6 +105,7 @@ Shader "Custom/FabricPBR"
 
         [Header(Transparency)]
         _Opacity("Base Opacity", Range(0, 1)) = 1.0
+        _ShadowDensity("Shadow Density", Range(0, 2)) = 1.0
         [Toggle] _ForwardZWrite("Forward Depth Write (Transparent)", Float) = 0
         [Toggle(Use Opacity Map)] _UseOpacityMap("Use Opacity Map", Float) = 0
         _OpacityMap("Opacity Map (R = opaque)", 2D) = "white" {}
@@ -666,29 +667,25 @@ Shader "Custom/FabricPBR"
                     float  evenLoops  = ceil(_NumberOfLoops * 0.5) * 2.0;
                     float2 scaledKnit = knitUV * evenLoops;
 
-                    float2 knitPixelSize = fwidth(scaledKnit);
-                    float  knitCoverage  = max(knitPixelSize.x, knitPixelSize.y);
+                    float2 dKdx = ddx(scaledKnit);
+                    float2 dKdy = ddy(scaledKnit);
+                    float  knitCoverage  = max(length(dKdx), length(dKdy));
 
                     float adaptiveSoftness = _OpeningSoftness
                                            + saturate(knitCoverage * 0.25) * 0.12;
 
-                    float ign = InterleavedGradientNoise(IN.positionCS.xy);
-                    float2 uvJitter = (ign - 0.5) * knitPixelSize * 0.2;
-                    scaledKnit += uvJitter;
+                    float fadeSpan = max(_KnitFadeEnd - _KnitFadeStart, 1e-4);
+                    float t        = saturate((knitCoverage - _KnitFadeStart) / fadeSpan);
 
-                    float bumpFade   = 1.0 - smoothstep(_KnitFadeStart, _KnitFadeEnd, knitCoverage);
-                    float detailFade = 1.0 - smoothstep(
-                        _KnitFadeStart * 1.5,
-                        _KnitFadeEnd * 1.8,
-                        knitCoverage);
-                    float colorFade  = 1.0 - smoothstep(
-                        _KnitFadeStart * 2.5,
-                        _KnitFadeEnd * 2.5,
-                        knitCoverage);
+                    // Two-stage anti-moire transition:
+                    // 1) Early gentle prefilter to avoid abrupt onset
+                    // 2) Later stronger filtering for heavy minification
+                    float prefilterSoft  = smoothstep(0.0, 0.75, t);
+                    float prefilterStrong = smoothstep(0.25, 1.0, t);
 
-                    float transNoise = FabricNoiseValue(scaledKnit * 0.37) * 0.15;
-                    detailFade = saturate(detailFade + transNoise - 0.075);
-                    colorFade  = saturate(colorFade  + transNoise - 0.075);
+                    float bumpFade        = lerp(1.0, 0.12, prefilterStrong);
+                    float detailRetention = lerp(1.0, 0.22, prefilterSoft);
+                    float colorRetention  = lerp(1.0, 0.32, prefilterSoft);
 
                     float openArea = PI * _OpeningSize * _OpeningSize * _LoopAspect;
                     float cellArea = _LoopAspect;
@@ -716,12 +713,32 @@ Shader "Custom/FabricPBR"
                     float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
 
                     float4 knit = EvaluateKnit(scaledKnit, stretchMod, adaptiveSoftness);
+
+                    if (prefilterSoft > 0.001)
+                    {
+                        float2 dx = dKdx;
+                        float2 dy = dKdy;
+
+                        float filterRadius = lerp(0.2, 1.0, prefilterSoft);
+
+                        float2 o1 = (dx + dy) * filterRadius;
+                        float2 o2 = (dx - dy) * filterRadius;
+
+                        float4 k1 = EvaluateKnit(scaledKnit + o1, stretchMod, adaptiveSoftness);
+                        float4 k2 = EvaluateKnit(scaledKnit - o1, stretchMod, adaptiveSoftness);
+                        float4 k3 = EvaluateKnit(scaledKnit + o2, stretchMod, adaptiveSoftness);
+                        float4 k4 = EvaluateKnit(scaledKnit - o2, stretchMod, adaptiveSoftness);
+
+                        float4 knitAvg = (knit + k1 + k2 + k3 + k4) * 0.2;
+                        knit = lerp(knit, knitAvg, prefilterSoft);
+                    }
+
                     float knitH = knit.x;
                     knitThreadMask = knit.y;
                     knitEdgeMask   = knit.z;
 
-                    knitThreadMask = lerp(knitAvgThread, knitThreadMask, detailFade);
-                    knitEdgeMask  *= detailFade;
+                    knitThreadMask = lerp(knitAvgThread, knitThreadMask, detailRetention);
+                    knitEdgeMask  *= detailRetention;
 
                     float dhdx = ddx(knitH);
                     float dhdy = ddy(knitH);
@@ -737,9 +754,9 @@ Shader "Custom/FabricPBR"
 
                     float threadProfile = saturate(1.0 - knitH * 2.5);
                     float darkening = lerp(1.0 - _ThreadDarken, 1.0, threadProfile);
-                    albedo *= lerp(1.0, darkening, colorFade);
+                    albedo *= lerp(1.0, darkening, colorRetention);
 
-                    roughness += _KnitRoughnessVar * (1.0 - knitThreadMask) * detailFade;
+                    roughness += _KnitRoughnessVar * (1.0 - knitThreadMask) * detailRetention;
                     roughness = clamp(roughness, 0.045, 1.0);
                 }
 
@@ -1074,6 +1091,8 @@ Shader "Custom/FabricPBR"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv         : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
+                float4 vertexColor: TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -1099,18 +1118,112 @@ Shader "Custom/FabricPBR"
 
                 OUT.positionCS = posCS;
                 OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
+                OUT.positionWS = posWS;
+                OUT.vertexColor = IN.color;
                 return OUT;
+            }
+
+            float ShadowHash(float2 p)
+            {
+                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+            }
+
+            float ComputeShadowStretchAmount(Varyings IN)
+            {
+                if (_UseStretchFromVertexG > 0)
+                    return saturate(IN.vertexColor.g);
+
+                float3 dPdx_ws = ddx(IN.positionWS);
+                float3 dPdy_ws = ddy(IN.positionWS);
+                float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
+
+                float2 dUVdx = ddx(IN.uv);
+                float2 dUVdy = ddy(IN.uv);
+                float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
+                float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
+
+                float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
+                return saturate((stretchRatio - 1.0) * _StretchTransparency);
+            }
+
+            float EvaluateShadowKnitMask(float2 uv, float stretchAmount)
+            {
+                float2 knitUV = uv * _KnitUVTiling;
+                float  evenLoops = max(2.0, ceil(_NumberOfLoops * 0.5) * 2.0);
+                float2 scaled = knitUV * evenLoops;
+
+                float2 dKdx = ddx(scaled);
+                float2 dKdy = ddy(scaled);
+                float  knitCoverage = max(length(dKdx), length(dKdy));
+
+                float adaptiveSoftness = _OpeningSoftness
+                                       + saturate(knitCoverage * 0.25) * 0.12;
+
+                float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
+                float openSize = _OpeningSize * stretchMod;
+
+                float minDist = 100.0;
+                float colBase = floor(scaled.x);
+
+                [unroll]
+                for (int dc = -1; dc <= 1; dc++)
+                {
+                    float col = colBase + (float)dc;
+                    float stagger = fmod(abs(col), 2.0) * 0.5;
+                    float adjY = scaled.y - stagger;
+                    float rowBase = floor(adjY);
+
+                    [unroll]
+                    for (int dr = 0; dr <= 1; dr++)
+                    {
+                        float row = rowBase + (float)dr;
+                        float2 cid = float2(col, row);
+
+                        float jx = ShadowHash(cid + float2(0.0, 0.0));
+                        float jy = ShadowHash(cid + float2(53.0, 97.0));
+                        float2 jitter = (float2(jx, jy) - 0.5) * _KnitJitter;
+
+                        float2 center = float2(col + 0.5, row + 0.5 + stagger) + jitter;
+                        float2 diff = scaled - center;
+                        float2 aspDiff = diff * float2(1.0, 1.0 / max(_LoopAspect, 0.001));
+                        float dist = length(aspDiff);
+                        minDist = min(minDist, dist);
+                    }
+                }
+
+                return smoothstep(
+                    openSize - adaptiveSoftness,
+                    openSize + adaptiveSoftness,
+                    minDist);
             }
 
             half4 ShadowFrag(Varyings IN) : SV_TARGET
             {
-                float opacity = _Opacity * _BaseColor.a;
+                float opacity;
 
-                if (_UseOpacityMap > 0)
-                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
+                if (_UseProceduralKnit > 0)
+                {
+                    float stretchAmount = ComputeShadowStretchAmount(IN);
+                    float threadMask = EvaluateShadowKnitMask(IN.uv, stretchAmount);
+                    opacity = lerp(_GapOpacity, 1.0, threadMask);
+                }
+                else
+                {
+                    opacity = _Opacity * _BaseColor.a;
+                    if (_UseOpacityMap > 0)
+                        opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
+                }
 
-                // Dithered clip: statistically produces semi-transparent shadow
-                float dither = DitherThreshold4x4(IN.positionCS.xy);
+                if (_UseVertexAlpha > 0)
+                    opacity *= IN.vertexColor.a;
+
+                if (_UseDenierFromVertexR > 0)
+                    opacity *= lerp(_DenierMin, _DenierMax, IN.vertexColor.r);
+
+                opacity = saturate(opacity * _ShadowDensity);
+
+                // World-stable stochastic clip to avoid view/cascade swimming
+                float dither = StableDitherWS(IN.positionWS);
                 clip(opacity - dither);
 
                 return 0;
@@ -1147,6 +1260,7 @@ Shader "Custom/FabricPBR"
             {
                 float4 positionOS : POSITION;
                 float2 texcoord   : TEXCOORD0;
+                float4 color      : COLOR;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -1154,6 +1268,8 @@ Shader "Custom/FabricPBR"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv         : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
+                float4 vertexColor: TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -1166,16 +1282,111 @@ Shader "Custom/FabricPBR"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
+                OUT.vertexColor = IN.color;
                 return OUT;
+            }
+
+            float DepthHash(float2 p)
+            {
+                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+            }
+
+            float ComputeDepthStretchAmount(Varyings IN)
+            {
+                if (_UseStretchFromVertexG > 0)
+                    return saturate(IN.vertexColor.g);
+
+                float3 dPdx_ws = ddx(IN.positionWS);
+                float3 dPdy_ws = ddy(IN.positionWS);
+                float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
+
+                float2 dUVdx = ddx(IN.uv);
+                float2 dUVdy = ddy(IN.uv);
+                float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
+                float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
+
+                float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
+                return saturate((stretchRatio - 1.0) * _StretchTransparency);
+            }
+
+            float EvaluateDepthKnitMask(float2 uv, float stretchAmount)
+            {
+                float2 knitUV = uv * _KnitUVTiling;
+                float  evenLoops = max(2.0, ceil(_NumberOfLoops * 0.5) * 2.0);
+                float2 scaled = knitUV * evenLoops;
+
+                float2 dKdx = ddx(scaled);
+                float2 dKdy = ddy(scaled);
+                float  knitCoverage = max(length(dKdx), length(dKdy));
+
+                float adaptiveSoftness = _OpeningSoftness
+                                       + saturate(knitCoverage * 0.25) * 0.12;
+
+                float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
+                float openSize = _OpeningSize * stretchMod;
+
+                float minDist = 100.0;
+                float colBase = floor(scaled.x);
+
+                [unroll]
+                for (int dc = -1; dc <= 1; dc++)
+                {
+                    float col = colBase + (float)dc;
+                    float stagger = fmod(abs(col), 2.0) * 0.5;
+                    float adjY = scaled.y - stagger;
+                    float rowBase = floor(adjY);
+
+                    [unroll]
+                    for (int dr = 0; dr <= 1; dr++)
+                    {
+                        float row = rowBase + (float)dr;
+                        float2 cid = float2(col, row);
+
+                        float jx = DepthHash(cid + float2(0.0, 0.0));
+                        float jy = DepthHash(cid + float2(53.0, 97.0));
+                        float2 jitter = (float2(jx, jy) - 0.5) * _KnitJitter;
+
+                        float2 center = float2(col + 0.5, row + 0.5 + stagger) + jitter;
+                        float2 diff = scaled - center;
+                        float2 aspDiff = diff * float2(1.0, 1.0 / max(_LoopAspect, 0.001));
+                        float dist = length(aspDiff);
+                        minDist = min(minDist, dist);
+                    }
+                }
+
+                return smoothstep(
+                    openSize - adaptiveSoftness,
+                    openSize + adaptiveSoftness,
+                    minDist);
             }
 
             half DepthFrag(Varyings IN) : SV_TARGET
             {
-                float opacity = _Opacity * _BaseColor.a;
-                if (_UseOpacityMap > 0)
-                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
+                float opacity;
 
-                float dither = DitherThreshold4x4(IN.positionCS.xy);
+                if (_UseProceduralKnit > 0)
+                {
+                    float stretchAmount = ComputeDepthStretchAmount(IN);
+                    float threadMask = EvaluateDepthKnitMask(IN.uv, stretchAmount);
+                    opacity = lerp(_GapOpacity, 1.0, threadMask);
+                }
+                else
+                {
+                    opacity = _Opacity * _BaseColor.a;
+                    if (_UseOpacityMap > 0)
+                        opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
+                }
+
+                if (_UseVertexAlpha > 0)
+                    opacity *= IN.vertexColor.a;
+
+                if (_UseDenierFromVertexR > 0)
+                    opacity *= lerp(_DenierMin, _DenierMax, IN.vertexColor.r);
+
+                opacity = saturate(opacity * _ShadowDensity);
+
+                float dither = StableDitherWS(IN.positionWS);
                 clip(opacity - dither);
                 return 0;
             }

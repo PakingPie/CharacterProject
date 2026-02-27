@@ -95,13 +95,13 @@ Material:
     - _GapEdgeHighlight: 0.2
     - _GapOpacity: 0
     - _HeightScale: 0
-    - _KnitFadeEnd: 0.7
-    - _KnitFadeStart: 0.2
+    - _KnitFadeEnd: 0.55
+    - _KnitFadeStart: 0.06
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 8
     - _KnitNormalStrength: 1
     - _KnitRoughnessVar: 0.06
-    - _KnitUVTiling: 1
+    - _KnitUVTiling: 20
     - _LoopAspect: 1.2
     - _Metallic: 0
     - _NormalStrength: 1
@@ -111,6 +111,7 @@ Material:
     - _OpeningSoftness: 0.1
     - _Roughness: 0.33
     - _SeeThruTint: 0.75
+    - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
     - _SpecularTint: 0
@@ -144,6 +145,6 @@ Material:
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
-    - _TextureTiling: {r: 10, g: 10, b: 0, a: 0}
+    - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

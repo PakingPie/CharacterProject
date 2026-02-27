@@ -69,6 +69,7 @@ CBUFFER_START(UnityPerMaterial)
     float  _DenierMax;
 
     float  _Opacity;
+    float  _ShadowDensity;
     float  _ForwardZWrite;
     float  _UseOpacityMap;
     float  _UseVertexAlpha;
@@ -98,6 +99,12 @@ float DitherThreshold4x4(float2 screenPos)
     );
     uint2 idx = uint2(screenPos) % 4;
     return bayer[idx.x][idx.y];
+}
+
+float StableDitherWS(float3 positionWS)
+{
+    float3 p = floor(positionWS * 128.0);
+    return frac(sin(dot(p, float3(12.9898, 78.233, 37.719))) * 43758.5453);
 }
 
 #endif
