@@ -14,13 +14,6 @@ float2 SampleSSAO(float2 screenUV)
     return float2(DirectAO, IndirectAO);
 }
 
-// ── Parallax ─────────────────────────────────
-float2 ParallaxOffset(float2 uv, float3 viewDirTS)
-{
-    float h = SAMPLE_TEXTURE2D(_HeightMap, sampler_HeightMap, uv).r;
-    return uv + viewDirTS.xy / (viewDirTS.z + 0.42) * (h * _HeightScale);
-}
-
 // ── IBL ──────────────────────────────────────
 float3 CalculateIBL(
     float3 normalWS, float3 viewDirWS, float3 positionWS, float2 screenUV,

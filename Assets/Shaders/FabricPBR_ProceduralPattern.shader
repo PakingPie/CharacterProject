@@ -1,35 +1,21 @@
-Shader "Custom/FabricPBR"
+Shader "Custom/FabricPBR_ProceduralPattern"
 {
     Properties
     {
         [Header(Main Color)]
-        _MainTex("Albedo (RGB)", 2D) = "white" {}
         _BaseColor("Base Color", Color) = (1,1,1,1)
-
-        [Header(Normal Map)]
-        [Toggle(Use Normal Map)] _UseNormalMap("Use Normal Map", Float) = 0
-        _NormalMap("Normal Map", 2D) = "bump" {}
-        _NormalStrength("Normal Strength", Range(0, 10)) = 1.0
 
         [Header(Metallic)]
         _Metallic("Metallic", Range(0,1)) = 0.0
-        [Toggle(Use Metallic Map)] _UseMetallicMap("Use Metallic Map", Float) = 0
-        _MetallicMap("Metallic Map", 2D) = "white" {}
 
         [Header(Roughness)]
         _Roughness("Roughness", Range(0,1)) = 0.5
-        [Toggle(Use Roughness Map)] _UseRoughnessMap("Use Roughness Map", Float) = 0
-        _RoughnessMap("Roughness Map", 2D) = "white" {}
 
         [Header(Ambient Occlusion)]
         _AmbientOcclusion("Ambient Occlusion", Range(0,1)) = 1.0
-        [Toggle(Use AO Map)] _UseAOMap("Use AO Map", Float) = 0
-        _AOMap("AO Map", 2D) = "white" {}
 
         [Header(Anisotropy)]
         _Anisotropy("Anisotropy", Range(0,1)) = 0.5
-        [Toggle(Use Anisotropy Map)] _UseAnisotropyMap("Use Anisotropy Map", Float) = 0
-        _AnisotropyMap("Anisotropy Map", 2D) = "white" {}
 
         [Header(Specular)]
         _SpecularColor("Specular Color", Color) = (1,1,1,1)
@@ -38,11 +24,6 @@ Shader "Custom/FabricPBR"
         [Header(Emission)]
         _EmissionColor("Emission Color", Color) = (0,0,0,1)
         [Toggle(Enable Emission)] _EnableEmission("Enable Emission", Float) = 0
-
-        [Header(Height Map)]
-        [Toggle(Use Height Map)] _UseHeightMap("Use Height Map", Float) = 0
-        _HeightMap("Height Map", 2D) = "black" {}
-        _HeightScale("Height Scale", Range(0, 0.1)) = 0.02
 
         [Header(Sheen  (velvet  felt  not nylon))]
         _Sheen("Sheen Intensity", Range(0,1)) = 0.0
@@ -112,8 +93,6 @@ Shader "Custom/FabricPBR"
         _Opacity("Base Opacity", Range(0, 1)) = 1.0
         _ShadowDensity("Shadow Density", Range(0, 2)) = 1.0
         [Toggle] _ForwardZWrite("Forward Depth Write (Transparent)", Float) = 0
-        [Toggle(Use Opacity Map)] _UseOpacityMap("Use Opacity Map", Float) = 0
-        _OpacityMap("Opacity Map (R = opaque)", 2D) = "white" {}
         [Toggle(Use Vertex Alpha)] _UseVertexAlpha("Use Vertex Color Alpha", Float) = 0
         _FresnelOpacityPower("Edge Opacity Power", Range(1, 8)) = 3.0
         _FresnelOpacityStrength("Edge Opacity Boost", Range(0, 1)) = 0.0
@@ -125,8 +104,6 @@ Shader "Custom/FabricPBR"
 
         [Header(Reflection)]
         [Toggle(Use Reflective Probe)] _UseReflectiveProbe("Use Reflective Probe", Float) = 0
-        [Toggle(Use Custom Cubemap)] _UseCustomCubemap("Use Custom Cubemap", Float) = 0
-        _CustomCubemap("Custom Cubemap", Cube) = "" {}
     }
 
     SubShader
@@ -172,14 +149,6 @@ Shader "Custom/FabricPBR"
             #pragma multi_compile_instancing
 
             // ── Texture / Sampler Declarations ───────────
-            TEXTURE2D(_MainTex);          SAMPLER(sampler_MainTex);
-            TEXTURE2D(_NormalMap);         SAMPLER(sampler_NormalMap);
-            TEXTURE2D(_MetallicMap);       SAMPLER(sampler_MetallicMap);
-            TEXTURE2D(_RoughnessMap);      SAMPLER(sampler_RoughnessMap);
-            TEXTURE2D(_AOMap);             SAMPLER(sampler_AOMap);
-            TEXTURE2D(_AnisotropyMap);     SAMPLER(sampler_AnisotropyMap);
-            TEXTURE2D(_HeightMap);         SAMPLER(sampler_HeightMap);
-            TEXTURE2D(_OpacityMap);        SAMPLER(sampler_OpacityMap);
             TEXTURECUBE(_CustomCubemap);   SAMPLER(sampler_CustomCubemap);
 
             #include "FabricPBR_Common.hlsl"    // ★ shared CBUFFER
@@ -246,7 +215,7 @@ Shader "Custom/FabricPBR"
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(IN.positionOS.xyz);
                 VertexNormalInputs   normalInput = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
 
-                OUT.uv         = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
+                OUT.uv         = IN.texcoord * _TextureTiling.xy;
                 OUT.positionWS = vertexInput.positionWS;
                 OUT.positionCS = vertexInput.positionCS;
 
@@ -313,46 +282,20 @@ Shader "Custom/FabricPBR"
                 half3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w));
                 float2 uv = IN.uv;
 
-                // ── Parallax Offset ──────────────────────
-                if (_UseHeightMap > 0)
-                {
-                    float3x3 tbn     = float3x3(IN.tangentWS.xyz,
-                    IN.bitangentWS.xyz,
-                    IN.normalWS.xyz);
-                    float3 viewDirTS = mul(tbn, viewDirWS);
-                    uv = ParallaxOffset(uv, viewDirTS);
-                }
+                float3 albedo = _BaseColor.rgb;
+                float  alpha  = _BaseColor.a;
 
-                // ── Sample Surface Maps ──────────────────
-                float4 albedoSample = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
-                float3 albedo = _BaseColor.rgb * albedoSample.rgb;
-                float  alpha  = _BaseColor.a   * albedoSample.a;
+                float metallic = _Metallic;
 
-                float metallic = _UseMetallicMap > 0
-                ? SAMPLE_TEXTURE2D(_MetallicMap, sampler_MetallicMap, uv).r * _Metallic
-                : _Metallic;
-
-                float roughness = _UseRoughnessMap > 0
-                ? SAMPLE_TEXTURE2D(_RoughnessMap, sampler_RoughnessMap, uv).r * _Roughness
-                : _Roughness;
+                float roughness = _Roughness;
                 roughness = max(roughness, 0.045);
 
-                float ao = _UseAOMap > 0
-                ? SAMPLE_TEXTURE2D(_AOMap, sampler_AOMap, uv).r * _AmbientOcclusion
-                : _AmbientOcclusion;
+                float ao = _AmbientOcclusion;
 
-                float anisotropy = _UseAnisotropyMap > 0
-                ? SAMPLE_TEXTURE2D(_AnisotropyMap, sampler_AnisotropyMap, uv).r * _Anisotropy
-                : _Anisotropy;
+                float anisotropy = _Anisotropy;
 
                 // ── Normal ───────────────────────────────
                 half3 normalTS = half3(0, 0, 1);
-                if (_UseNormalMap > 0)
-                {
-                    normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv));
-                    normalTS.xy *= _NormalStrength;
-                    normalTS = normalize(normalTS);
-                }
 
                 // ══════════════════════════════════════════
                 //   PROCEDURAL KNIT INTEGRATION
@@ -437,7 +380,7 @@ Shader "Custom/FabricPBR"
                     rVar += (fiberRnd - 0.5) * _KnitRoughnessVar * 0.5;
 
                     roughness += rVar * knit.threadMask * knit.fade;
-                    roughness = clamp(roughness, 0.045, 1.0);
+                    roughness = clamp(roughness, 0.12, 1.0);
                 }
 
                 // ── Fabric specular softening ────────────
@@ -447,11 +390,11 @@ Shader "Custom/FabricPBR"
                 if (_UseProceduralKnit > 0)
                 {
                     // Push effective roughness higher — fabric isn't smooth
-                    roughness = saturate(roughness + 0.3);
+                    roughness = saturate(roughness + 0.45);
 
                     // Attenuate the sharp Cook-Torrance peak;
                     // the sheen (Charlie D) carries the fabric highlight instead
-                    fabricSpecMul = 0.08;
+                    fabricSpecMul = 0.06;
                 }
 
                 half3x3 tbnMatrix = half3x3(
@@ -469,21 +412,26 @@ Shader "Custom/FabricPBR"
                 // across fiber microstructure, so individual thread bumps
                 // should NOT produce individual specular peaks.
                 float3 geomNormalWS = normalize(IN.normalWS.xyz);
-                float  specSmooth   = (_UseProceduralKnit > 0) ? 0.85 : 0.0;
+                float  specSmooth   = (_UseProceduralKnit > 0) ? 0.94 : 0.0;
                 float3 specNormalWS = normalize(lerp(normalWS, geomNormalWS, specSmooth));
 
                 float nov     = max(dot(normalWS,     viewDirWS), 0.0001);
                 float specNoV = max(dot(specNormalWS,  viewDirWS), 0.0001);
 
                 float clearcoatWeight = saturate(_ClearCoat);
+                if (_UseProceduralKnit > 0)
+                {
+                    clearcoatWeight *= 0.35;
+                }
+
+                float specAnisotropy = (_UseProceduralKnit > 0)
+                ? anisotropy * 0.35
+                : anisotropy;
 
                 // ══════════════════════════════════════════
                 // Opacity pipeline
                 // ══════════════════════════════════════════
                 float opacity = _Opacity;
-
-                if (_UseOpacityMap > 0)
-                opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, uv).r;
 
                 if (_UseVertexAlpha > 0)
                 opacity *= IN.vertexColor.a;
@@ -630,7 +578,7 @@ Shader "Custom/FabricPBR"
 
                 float3 F_direct = FresnelSchlick(voh, F0);
                 float  D_direct = DistributionGGXAnisotropic(
-                specNormalWS, tangentWS, h, roughness, anisotropy);  // ← specNormalWS
+                specNormalWS, tangentWS, h, roughness, specAnisotropy);  // ← specNormalWS
                 float  G_direct = GeometrySmithSchlickGGX(specNoV, nol, roughness);  // ← specNoV
                 float3 specular = (D_direct * G_direct * F_direct)
                 / max(4.0 * specNoV * nol, 0.001) * fabricSpecMul;  // ← specNoV + fabricSpecMul
@@ -699,7 +647,7 @@ Shader "Custom/FabricPBR"
 
                 float3 aSpec = EvaluateSpecular(
                 specNormalWS, viewDirWS, light.direction,       // ← specNormalWS
-                tangentWS, F0, roughness, anisotropy) * fabricSpecMul;  // ← fabricSpecMul
+                tangentWS, F0, roughness, specAnisotropy) * fabricSpecMul;  // ← fabricSpecMul
 
                 float3 aDiff = (1.0 - aF) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
@@ -777,9 +725,6 @@ Shader "Custom/FabricPBR"
 
             float3 _LightDirection;
 
-            TEXTURE2D(_MainTex);       SAMPLER(sampler_MainTex);
-            TEXTURE2D(_OpacityMap);    SAMPLER(sampler_OpacityMap);
-
             // ★ NO CBUFFER HERE — it's in the include
 
             struct Attributes
@@ -821,7 +766,7 @@ Shader "Custom/FabricPBR"
                 #endif
 
                 OUT.positionCS = posCS;
-                OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
+                OUT.uv = IN.texcoord * _TextureTiling.xy;
                 OUT.positionWS = posWS;
                 OUT.vertexColor = IN.color;
                 return OUT;
@@ -914,8 +859,6 @@ Shader "Custom/FabricPBR"
                 else
                 {
                     opacity = _Opacity * _BaseColor.a;
-                    if (_UseOpacityMap > 0)
-                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
                 }
 
                 if (_UseVertexAlpha > 0)
@@ -955,9 +898,6 @@ Shader "Custom/FabricPBR"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "FabricPBR_Common.hlsl"    // ★ SAME CBUFFER
 
-            TEXTURE2D(_OpacityMap); SAMPLER(sampler_OpacityMap);
-            TEXTURE2D(_MainTex);    SAMPLER(sampler_MainTex);
-
             // ★ NO CBUFFER HERE — it's in the include
 
             struct Attributes
@@ -985,7 +925,7 @@ Shader "Custom/FabricPBR"
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
-                OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
+                OUT.uv = IN.texcoord * _TextureTiling.xy;
                 OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.vertexColor = IN.color;
                 return OUT;
@@ -1078,8 +1018,6 @@ Shader "Custom/FabricPBR"
                 else
                 {
                     opacity = _Opacity * _BaseColor.a;
-                    if (_UseOpacityMap > 0)
-                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
                 }
 
                 if (_UseVertexAlpha > 0)
