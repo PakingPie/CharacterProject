@@ -1,4 +1,4 @@
-Shader "Custom/FabricPBR"
+Shader "Custom/FabricPBR_TextureBased"
 {
     Properties
     {
@@ -63,30 +63,6 @@ Shader "Custom/FabricPBR"
         _FuzzIntensity("Fuzz Intensity", Range(0, 1)) = 0.0
         _FuzzColor("Fuzz Color", Color) = (0.5, 0.5, 0.5, 1)
         _FuzzPower("Fuzz Power", Range(1, 8)) = 3.0
-
-        [Header(Procedural Knit)]
-        [Toggle] _UseProceduralKnit("Enable Procedural Knit", Float) = 0
-        _KnitUVTiling("UV Tiling Multiplier", Float) = 1.0
-        _NumberOfLoops("Loop Count (per UV)", Float) = 40
-        _LoopAspect("Loop Height over Width", Range(0.5, 2.5)) = 1.3
-        _OpeningSize("Opening Radius", Range(0.01, 0.45)) = 0.12
-        _OpeningSoftness("Opening Edge Softness", Range(0.005, 0.3)) = 0.08
-        _GapOpacity("Gap Min Opacity", Range(0, 1)) = 0.1
-        _KnitNormalStrength("Knit Bump Strength", Range(0, 10)) = 1.5
-        _KnitRoughnessVar("Thread Roughness Variation", Range(0, 0.3)) = 0.08
-        _ThreadDarken("Thread Edge Darkening", Range(0, 1)) = 0.12
-        _KnitJitter("Opening Position Jitter", Range(0, 0.15)) = 0.02
-        _KnitNoiseScale("Fiber Noise Scale", Float) = 10
-
-
-        _GapEdgeHighlight("Gap Edge Specular Boost", Range(0, 3)) = 0.8
-
-        _GapShapePower ("Gap Shape (1=Diamond  2=Ellipse)", Range(1.0, 2.5)) = 1.5
-        _GapWidthRatio ("Gap Width / Height Ratio", Range(0.5, 3.0)) = 1.5
-        _ThreadWidth   ("Thread Bump Width", Range(0.005, 0.25)) = 0.06
-
-        _KnitFadeStart("Moire Fade Start (cells per px)", Range(0.01, 1.0)) = 0.2
-        _KnitFadeEnd("Moire Fade End   (cells per px)", Range(0.1, 2.0)) = 0.7
 
         [Header(Stretch Transparency)]
         _StretchTransparency("Stretch to Transparency", Range(0, 2)) = 0.5
@@ -183,7 +159,7 @@ Shader "Custom/FabricPBR"
             TEXTURECUBE(_CustomCubemap);   SAMPLER(sampler_CustomCubemap);
 
             #include "FabricPBR_Common.hlsl"    // ★ shared CBUFFER
-            #include "FabricPBR_Utilities.hlsl" // ★ procedural knit functions
+            #include "FabricPBR_Utilities.hlsl" // ★ shared BRDF/utilities
 
             // ★ CBUFFER removed from here — now in FabricPBR_Common.hlsl
 
@@ -354,105 +330,7 @@ Shader "Custom/FabricPBR"
                     normalTS = normalize(normalTS);
                 }
 
-                // ══════════════════════════════════════════
-                //   PROCEDURAL KNIT INTEGRATION
-                // ══════════════════════════════════════════
-                float knitThreadMask = 1.0;
-                float knitEdgeMask   = 0.0;
-                float stretchAmount  = 0.0;
-                float knitAvgThread  = 1.0;
-
-                if (_UseProceduralKnit > 0)
-                {
-                    // ── Stretch computation ──────────────
-                    float3 dPdx_ws = ddx(IN.positionWS);
-                    float3 dPdy_ws = ddy(IN.positionWS);
-                    float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                    float2 dUVdx = ddx(uv);
-                    float2 dUVdy = ddy(uv);
-                    float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                    float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                    if (_UseStretchFromVertexG > 0)
-                    {
-                        stretchAmount = IN.vertexColor.g;
-                    }
-                    else
-                    {
-                        float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                        stretchAmount = saturate((stretchRatio - 1.0) * _StretchTransparency);
-                    }
-
-                    float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-                    float stretchedOpening = _OpeningSize * stretchMod;
-
-                    // ── Average thread coverage (moire fade target) ──
-                    float gapW = stretchedOpening * _GapWidthRatio;
-                    float gapH = stretchedOpening;
-                    knitAvgThread = saturate(1.0 - PI * gapW * gapH);
-
-                    // ── Evaluate the superelliptical knit SDF ──
-                    KnitResult knit = EvaluateKnitSDF(
-                    uv,
-                    _NumberOfLoops,
-                    _KnitUVTiling,
-                    _LoopAspect,
-                    stretchedOpening,
-                    _OpeningSoftness,
-                    _GapShapePower,
-                    _GapWidthRatio,
-                    _ThreadWidth,
-                    _KnitJitter,
-                    _KnitNormalStrength,
-                    _KnitFadeStart,
-                    _KnitFadeEnd
-                    );
-
-                    // ── Fade-aware outputs ───────────────
-                    // Blend thread mask toward average at distance (moire suppression)
-                    knitThreadMask = lerp(knitAvgThread, knit.threadMask, knit.fade);
-
-                    // Edge mask: Gaussian peak at gap boundary for specular edge highlight
-                    float edgeSigma = max(_OpeningSoftness * 0.7, 0.001);
-                    knitEdgeMask = exp(-pow(knit.threadDist / edgeSigma, 2.0)) * knit.fade;
-
-                    // ── Bump normal ──────────────────────
-                    // knit.bumpNormal already includes _KnitNormalStrength and fade
-                    normalTS.xy += knit.bumpNormal.xy;
-                    normalTS = normalize(normalTS);
-
-                    // ── Thread darkening ─────────────────
-                    float darkening = (1.0 - knit.profile) * knit.threadMask * _ThreadDarken;
-                    albedo *= 1.0 - darkening * knit.fade;
-
-                    // ── Roughness variation ──────────────
-                    float cellRand = KnitHash(knit.cellID);
-                    float rVar = (cellRand - 0.5) * 2.0 * _KnitRoughnessVar;
-
-                    // Fiber-scale noise (subtle high-freq variation per thread)
-                    float2 fiberUV = (frac(uv * _NumberOfLoops * _KnitUVTiling) - 0.5)
-                    * _KnitNoiseScale + knit.cellID * 1.7;
-                    float  fiberRnd = KnitHash(floor(fiberUV * 3.0));
-                    rVar += (fiberRnd - 0.5) * _KnitRoughnessVar * 0.5;
-
-                    roughness += rVar * knit.threadMask * knit.fade;
-                    roughness = clamp(roughness, 0.045, 1.0);
-                }
-
-                // ── Fabric specular softening ────────────
-                // Fiber microstructure broadens apparent specular
-                // and scatters the sharp GGX peak into softer distributions.
                 float fabricSpecMul = 1.0;
-                if (_UseProceduralKnit > 0)
-                {
-                    // Push effective roughness higher — fabric isn't smooth
-                    roughness = saturate(roughness + 0.3);
-
-                    // Attenuate the sharp Cook-Torrance peak;
-                    // the sheen (Charlie D) carries the fabric highlight instead
-                    fabricSpecMul = 0.08;
-                }
 
                 half3x3 tbnMatrix = half3x3(
                 IN.tangentWS.xyz,
@@ -465,12 +343,7 @@ Shader "Custom/FabricPBR"
                 float3 tangentWS = normalize(IN.tangentWS.xyz
                 - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
-                // Smooth normal for specular — fabric scatters highlights
-                // across fiber microstructure, so individual thread bumps
-                // should NOT produce individual specular peaks.
-                float3 geomNormalWS = normalize(IN.normalWS.xyz);
-                float  specSmooth   = (_UseProceduralKnit > 0) ? 0.85 : 0.0;
-                float3 specNormalWS = normalize(lerp(normalWS, geomNormalWS, specSmooth));
+                float3 specNormalWS = normalWS;
 
                 float nov     = max(dot(normalWS,     viewDirWS), 0.0001);
                 float specNoV = max(dot(specNormalWS,  viewDirWS), 0.0001);
@@ -493,18 +366,6 @@ Shader "Custom/FabricPBR"
                     float denier = lerp(_DenierMin, _DenierMax,
                     IN.vertexColor.r);
                     opacity *= denier;
-                }
-
-                if (_UseProceduralKnit > 0)
-                {
-                    float gapTransparency = lerp(_GapOpacity, 1.0, knitThreadMask);
-                    opacity *= gapTransparency;
-                }
-
-                if (_UseProceduralKnit > 0)
-                {
-                    float stretchOpacity = lerp(1.0, 0.5, stretchAmount);
-                    opacity *= stretchOpacity;
                 }
 
                 if (_FresnelOpacityStrength > 0)
@@ -651,14 +512,6 @@ Shader "Custom/FabricPBR"
                 float3 mainLighting = diffuse * nolWrap * mainRadiance
                 + (specular + sheen + clearcoat) * nol * mainRadiance;
 
-                if (_UseProceduralKnit > 0 && _GapEdgeHighlight > 0)
-                {
-                    float edgeNdH  = pow(noh, 4.0);
-                    float edgeSpec = knitEdgeMask * _GapEdgeHighlight
-                    * (edgeNdH * 0.7 + 0.3 * nol);
-                    mainLighting += edgeSpec * mainRadiance;
-                }
-
                 mainLighting += EvaluateTransmission(
                 normalWS, viewDirWS, mainLight.direction,
                 mainLight.color,
@@ -718,13 +571,6 @@ Shader "Custom/FabricPBR"
 
                 addLighting += aDiff * aNoLWrap * lightRad
                 + (aSpec + aSheen + aCC) * aNoL * lightRad;
-
-                if (_UseProceduralKnit > 0 && _GapEdgeHighlight > 0)
-                {
-                    float aEdge = knitEdgeMask * _GapEdgeHighlight
-                    * (pow(aNoH, 4.0) * 0.7 + 0.3 * aNoL);
-                    addLighting += aEdge * lightRad;
-                }
 
                 addLighting += EvaluateTransmission(
                 normalWS, viewDirWS, light.direction,
@@ -827,96 +673,15 @@ Shader "Custom/FabricPBR"
                 return OUT;
             }
 
-            float ShadowHash(float2 p)
-            {
-                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
-            }
-
-            float ComputeShadowStretchAmount(Varyings IN)
-            {
-                if (_UseStretchFromVertexG > 0)
-                return saturate(IN.vertexColor.g);
-
-                float3 dPdx_ws = ddx(IN.positionWS);
-                float3 dPdy_ws = ddy(IN.positionWS);
-                float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                float2 dUVdx = ddx(IN.uv);
-                float2 dUVdy = ddy(IN.uv);
-                float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                return saturate((stretchRatio - 1.0) * _StretchTransparency);
-            }
-
-            float EvaluateShadowKnitMask(float2 uv, float stretchAmount)
-            {
-                float2 knitUV = uv * _KnitUVTiling;
-                float  evenLoops = max(2.0, ceil(_NumberOfLoops * 0.5) * 2.0);
-                float2 scaled = knitUV * evenLoops;
-
-                float2 dKdx = ddx(scaled);
-                float2 dKdy = ddy(scaled);
-                float  knitCoverage = max(length(dKdx), length(dKdy));
-
-                float adaptiveSoftness = _OpeningSoftness
-                + saturate(knitCoverage * 0.25) * 0.12;
-
-                float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-                float openSize = _OpeningSize * stretchMod;
-
-                float minDist = 100.0;
-                float colBase = floor(scaled.x);
-
-                [unroll]
-                for (int dc = -1; dc <= 1; dc++)
-                {
-                    float col = colBase + (float)dc;
-                    float stagger = fmod(abs(col), 2.0) * 0.5;
-                    float adjY = scaled.y - stagger;
-                    float rowBase = floor(adjY);
-
-                    [unroll]
-                    for (int dr = 0; dr <= 1; dr++)
-                    {
-                        float row = rowBase + (float)dr;
-                        float2 cid = float2(col, row);
-
-                        float jx = ShadowHash(cid + float2(0.0, 0.0));
-                        float jy = ShadowHash(cid + float2(53.0, 97.0));
-                        float2 jitter = (float2(jx, jy) - 0.5) * _KnitJitter;
-
-                        float2 center = float2(col + 0.5, row + 0.5 + stagger) + jitter;
-                        float2 diff = scaled - center;
-                        float2 aspDiff = diff * float2(1.0, 1.0 / max(_LoopAspect, 0.001));
-                        float dist = length(aspDiff);
-                        minDist = min(minDist, dist);
-                    }
-                }
-
-                return smoothstep(
-                openSize - adaptiveSoftness,
-                openSize + adaptiveSoftness,
-                minDist);
-            }
-
             half4 ShadowFrag(Varyings IN) : SV_TARGET
             {
                 float opacity;
 
-                if (_UseProceduralKnit > 0)
-                {
-                    float stretchAmount = ComputeShadowStretchAmount(IN);
-                    float threadMask = EvaluateShadowKnitMask(IN.uv, stretchAmount);
-                    opacity = lerp(_GapOpacity, 1.0, threadMask);
-                }
-                else
-                {
-                    opacity = _Opacity * _BaseColor.a;
-                    if (_UseOpacityMap > 0)
-                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
-                }
+
+                opacity = _Opacity * _BaseColor.a;
+                if (_UseOpacityMap > 0)
+                opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
+                
 
                 if (_UseVertexAlpha > 0)
                 opacity *= IN.vertexColor.a;
@@ -991,96 +756,15 @@ Shader "Custom/FabricPBR"
                 return OUT;
             }
 
-            float DepthHash(float2 p)
-            {
-                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
-            }
-
-            float ComputeDepthStretchAmount(Varyings IN)
-            {
-                if (_UseStretchFromVertexG > 0)
-                return saturate(IN.vertexColor.g);
-
-                float3 dPdx_ws = ddx(IN.positionWS);
-                float3 dPdy_ws = ddy(IN.positionWS);
-                float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                float2 dUVdx = ddx(IN.uv);
-                float2 dUVdy = ddy(IN.uv);
-                float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                return saturate((stretchRatio - 1.0) * _StretchTransparency);
-            }
-
-            float EvaluateDepthKnitMask(float2 uv, float stretchAmount)
-            {
-                float2 knitUV = uv * _KnitUVTiling;
-                float  evenLoops = max(2.0, ceil(_NumberOfLoops * 0.5) * 2.0);
-                float2 scaled = knitUV * evenLoops;
-
-                float2 dKdx = ddx(scaled);
-                float2 dKdy = ddy(scaled);
-                float  knitCoverage = max(length(dKdx), length(dKdy));
-
-                float adaptiveSoftness = _OpeningSoftness
-                + saturate(knitCoverage * 0.25) * 0.12;
-
-                float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-                float openSize = _OpeningSize * stretchMod;
-
-                float minDist = 100.0;
-                float colBase = floor(scaled.x);
-
-                [unroll]
-                for (int dc = -1; dc <= 1; dc++)
-                {
-                    float col = colBase + (float)dc;
-                    float stagger = fmod(abs(col), 2.0) * 0.5;
-                    float adjY = scaled.y - stagger;
-                    float rowBase = floor(adjY);
-
-                    [unroll]
-                    for (int dr = 0; dr <= 1; dr++)
-                    {
-                        float row = rowBase + (float)dr;
-                        float2 cid = float2(col, row);
-
-                        float jx = DepthHash(cid + float2(0.0, 0.0));
-                        float jy = DepthHash(cid + float2(53.0, 97.0));
-                        float2 jitter = (float2(jx, jy) - 0.5) * _KnitJitter;
-
-                        float2 center = float2(col + 0.5, row + 0.5 + stagger) + jitter;
-                        float2 diff = scaled - center;
-                        float2 aspDiff = diff * float2(1.0, 1.0 / max(_LoopAspect, 0.001));
-                        float dist = length(aspDiff);
-                        minDist = min(minDist, dist);
-                    }
-                }
-
-                return smoothstep(
-                openSize - adaptiveSoftness,
-                openSize + adaptiveSoftness,
-                minDist);
-            }
-
             half DepthFrag(Varyings IN) : SV_TARGET
             {
                 float opacity;
 
-                if (_UseProceduralKnit > 0)
-                {
-                    float stretchAmount = ComputeDepthStretchAmount(IN);
-                    float threadMask = EvaluateDepthKnitMask(IN.uv, stretchAmount);
-                    opacity = lerp(_GapOpacity, 1.0, threadMask);
-                }
-                else
-                {
-                    opacity = _Opacity * _BaseColor.a;
-                    if (_UseOpacityMap > 0)
-                    opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
-                }
+                
+                opacity = _Opacity * _BaseColor.a;
+                if (_UseOpacityMap > 0)
+                opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, IN.uv).r;
+                
 
                 if (_UseVertexAlpha > 0)
                 opacity *= IN.vertexColor.a;

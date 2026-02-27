@@ -52,6 +52,9 @@ CBUFFER_START(UnityPerMaterial)
     float  _KnitJitter;
     float  _KnitNoiseScale;
     float  _GapEdgeHighlight;
+    float _GapShapePower;
+    float _GapWidthRatio;
+    float _ThreadWidth;
     float  _KnitFadeStart;
     float  _KnitFadeEnd;
 

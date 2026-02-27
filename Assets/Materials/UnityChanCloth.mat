@@ -26,8 +26,10 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
   m_InvalidKeywords:
-  - Use Custom Cubemap
-  - _USEPROCEDURALKNIT_ON
+  - Use AO Map
+  - Use Height Map
+  - Use Metallic Map
+  - Use Normal Map
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -79,69 +81,72 @@ Material:
     m_Floats:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0
-    - _Anisotropy: 0.25
+    - _Anisotropy: 0
     - _ClearCoat: 1
-    - _ClearCoatRoughness: 0.098
+    - _ClearCoatRoughness: 0.4
     - _DenierMax: 1
-    - _DenierMin: 0.4
-    - _DiffuseWrap: 0.15
+    - _DenierMin: 0
+    - _DiffuseWrap: 0.2
     - _EnableEmission: 0
-    - _F0: 0.04
+    - _F0: 0.02
     - _ForwardZWrite: 0
-    - _FresnelOpacityPower: 3
-    - _FresnelOpacityStrength: 0.35
-    - _FuzzIntensity: 0
+    - _FresnelOpacityPower: 1
+    - _FresnelOpacityStrength: 0.5
+    - _FuzzIntensity: 0.144
     - _FuzzPower: 3
-    - _GapEdgeHighlight: 0.2
-    - _GapOpacity: 0
+    - _GapEdgeHighlight: 0
+    - _GapOpacity: 0.5
+    - _GapShapePower: 1
+    - _GapWidthRatio: 1
     - _HeightScale: 0
-    - _KnitFadeEnd: 0.55
-    - _KnitFadeStart: 0.06
-    - _KnitJitter: 0.15
-    - _KnitNoiseScale: 8
+    - _KnitFadeEnd: 2
+    - _KnitFadeStart: 1
+    - _KnitJitter: 0
+    - _KnitNoiseScale: 10
     - _KnitNormalStrength: 1
-    - _KnitRoughnessVar: 0.06
-    - _KnitUVTiling: 20
+    - _KnitRoughnessVar: 0.3
+    - _KnitUVTiling: 8
     - _LoopAspect: 1.2
     - _Metallic: 0
     - _NormalStrength: 1
-    - _NumberOfLoops: 42
-    - _Opacity: 1
-    - _OpeningSize: 0.1
-    - _OpeningSoftness: 0.1
-    - _Roughness: 0.33
-    - _SeeThruTint: 0.75
+    - _NumberOfLoops: 50
+    - _Opacity: 0.5
+    - _OpeningSize: 0.15
+    - _OpeningSoftness: 0.05
+    - _Roughness: 0.4
+    - _SeeThruTint: 0.2
     - _ShadowDensity: 1
-    - _Sheen: 0
+    - _Sheen: 0.6
     - _SheenRoughness: 0.45
     - _SpecularTint: 0
     - _StretchOpeningGrow: 1.5
     - _StretchReference: 0.01
     - _StretchTransparency: 0.55
     - _Subsurface: 0
-    - _ThreadDarken: 0.2
+    - _ThreadDarken: 1
+    - _ThreadWidth: 0.25
     - _TransmissionDistortion: 1
     - _TransmissionPower: 1
-    - _TwoLayerDarkening: 0.45
+    - _TwoLayerDarkening: 0.5
     - _TwoLayerPower: 2
-    - _TwoLayerSaturation: 0.12
-    - _UseAOMap: 0
+    - _TwoLayerSaturation: 0
+    - _UseAOMap: 1
     - _UseAnisotropyMap: 0
-    - _UseCustomCubemap: 1
+    - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 0
-    - _UseHeightMap: 0
-    - _UseMetallicMap: 0
-    - _UseNormalMap: 0
+    - _UseHeightMap: 1
+    - _UseMetallicMap: 1
+    - _UseNormalMap: 1
     - _UseOpacityMap: 0
-    - _UseProceduralKnit: 1
+    - _UseProceduralKnit: 0
     - _UseReflectiveProbe: 0
     - _UseRoughnessMap: 0
     - _UseStretchFromVertexG: 0
     - _UseVertexAlpha: 0
     m_Colors:
-    - _BaseColor: {r: 0, g: 0, b: 0, a: 1}
+    - _BaseColor: {r: 0.21509439, g: 0.19439663, b: 0.19439663, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _FuzzColor: {r: 1, g: 1, b: 1, a: 1}
+    - _FuzzColor: {r: 0.3283019, g: 0.3283019, b: 0.3283019, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
