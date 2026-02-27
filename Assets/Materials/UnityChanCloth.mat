@@ -29,7 +29,9 @@ Material:
   - Use AO Map
   - Use Height Map
   - Use Metallic Map
-  - Use Normal Map
+  - Use Reflective Probe
+  - _FORWARDZWRITE_ON
+  - _USEPROCEDURALKNIT_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -42,7 +44,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _AOMap:
-        m_Texture: {fileID: 2800000, guid: 4057e07dc0bee824b8daf5365977c78f, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _AnisotropyMap:
@@ -50,11 +52,11 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _CustomCubemap:
-        m_Texture: {fileID: 8900000, guid: aeb40589cb5598f4db8f22a7cc32a30a, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 2800000, guid: 60faf8389da2c374783d783aeed88a34, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
@@ -62,11 +64,11 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MetallicMap:
-        m_Texture: {fileID: 2800000, guid: 2bd11b7184b48d8498997a2e713b4389, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NormalMap:
-        m_Texture: {fileID: 2800000, guid: d4fde00533008b04aa291687eb282312, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OpacityMap:
@@ -80,76 +82,76 @@ Material:
     m_Ints: []
     m_Floats:
     - _AmbientOcclusion: 1
-    - _AmbientTransmission: 0
-    - _Anisotropy: 0
-    - _ClearCoat: 1
-    - _ClearCoatRoughness: 0.4
+    - _AmbientTransmission: 0.5
+    - _Anisotropy: 0.2
+    - _ClearCoat: 3
+    - _ClearCoatRoughness: 0.3
     - _DenierMax: 1
-    - _DenierMin: 0
-    - _DiffuseWrap: 0.2
+    - _DenierMin: 0.3
+    - _DiffuseWrap: 0
     - _EnableEmission: 0
-    - _F0: 0.02
-    - _ForwardZWrite: 0
-    - _FresnelOpacityPower: 1
-    - _FresnelOpacityStrength: 0.5
-    - _FuzzIntensity: 0.144
+    - _F0: 0.05
+    - _ForwardZWrite: 1
+    - _FresnelOpacityPower: 3
+    - _FresnelOpacityStrength: 1
+    - _FuzzIntensity: 0
     - _FuzzPower: 3
-    - _GapEdgeHighlight: 0
-    - _GapOpacity: 0.5
-    - _GapShapePower: 1
+    - _GapEdgeHighlight: 0.1
+    - _GapOpacity: 0.8
+    - _GapShapePower: 2.5
     - _GapWidthRatio: 1
-    - _HeightScale: 0
-    - _KnitFadeEnd: 2
-    - _KnitFadeStart: 1
-    - _KnitJitter: 0
+    - _HeightScale: 0.02
+    - _KnitFadeEnd: 0.7
+    - _KnitFadeStart: 0.2
+    - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1
-    - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 8
-    - _LoopAspect: 1.2
+    - _KnitNormalStrength: 1.5
+    - _KnitRoughnessVar: 0
+    - _KnitUVTiling: 20
+    - _LoopAspect: 1
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
-    - _Opacity: 0.5
-    - _OpeningSize: 0.15
-    - _OpeningSoftness: 0.05
+    - _Opacity: 1
+    - _OpeningSize: 0.12
+    - _OpeningSoftness: 0.25
     - _Roughness: 0.4
-    - _SeeThruTint: 0.2
-    - _ShadowDensity: 1
-    - _Sheen: 0.6
-    - _SheenRoughness: 0.45
-    - _SpecularTint: 0
-    - _StretchOpeningGrow: 1.5
+    - _SeeThruTint: 0.85
+    - _ShadowDensity: 0.5
+    - _Sheen: 0
+    - _SheenRoughness: 0.5
+    - _SpecularTint: 1
+    - _StretchOpeningGrow: 1.45
     - _StretchReference: 0.01
-    - _StretchTransparency: 0.55
+    - _StretchTransparency: 0.5
     - _Subsurface: 0
-    - _ThreadDarken: 1
-    - _ThreadWidth: 0.25
-    - _TransmissionDistortion: 1
-    - _TransmissionPower: 1
-    - _TwoLayerDarkening: 0.5
+    - _ThreadDarken: 0.3
+    - _ThreadWidth: 0.5
+    - _TransmissionDistortion: 0.5
+    - _TransmissionPower: 4
+    - _TwoLayerDarkening: 1
     - _TwoLayerPower: 2
-    - _TwoLayerSaturation: 0
-    - _UseAOMap: 1
+    - _TwoLayerSaturation: 1
+    - _UseAOMap: 0
     - _UseAnisotropyMap: 0
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 0
-    - _UseHeightMap: 1
-    - _UseMetallicMap: 1
-    - _UseNormalMap: 1
+    - _UseHeightMap: 0
+    - _UseMetallicMap: 0
+    - _UseNormalMap: 0
     - _UseOpacityMap: 0
-    - _UseProceduralKnit: 0
-    - _UseReflectiveProbe: 0
+    - _UseProceduralKnit: 1
+    - _UseReflectiveProbe: 1
     - _UseRoughnessMap: 0
     - _UseStretchFromVertexG: 0
     - _UseVertexAlpha: 0
     m_Colors:
-    - _BaseColor: {r: 0.21509439, g: 0.19439663, b: 0.19439663, a: 1}
+    - _BaseColor: {r: 0.18, g: 0.15, b: 0.15, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _FuzzColor: {r: 0.3283019, g: 0.3283019, b: 0.3283019, a: 1}
-    - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
+    - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+    - _SheenColor: {r: 0.3584906, g: 0.3584906, b: 0.3584906, a: 1}
+    - _SpecularColor: {r: 1, g: 0.9, b: 0.85, a: 1}
+    - _SubsurfaceColor: {r: 1, g: 0.90196085, b: 0.85098046, a: 1}
     - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
