@@ -159,7 +159,7 @@ Shader "Custom/FabricPBR_TextureBased"
             TEXTURECUBE(_CustomCubemap);   SAMPLER(sampler_CustomCubemap);
 
             #include "FabricPBR_Common.hlsl"    // ★ shared CBUFFER
-            #include "FabricPBR_Utilities.hlsl" // ★ shared BRDF/utilities
+            #include "FabricPBR_TextureBased_Utilities.hlsl" // ★ shared BRDF/utilities
 
             // ★ CBUFFER removed from here — now in FabricPBR_Common.hlsl
 
@@ -274,13 +274,6 @@ Shader "Custom/FabricPBR_TextureBased"
                     inputData.bakedGI    = SAMPLE_GI(IN.staticLightmapUV, IN.vertexSH, inputData.normalWS);
                     inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
                 #endif
-            }
-
-            // ── Parallax ─────────────────────────────────
-            float2 ParallaxOffset(float2 uv, float3 viewDirTS)
-            {
-                float h = SAMPLE_TEXTURE2D(_HeightMap, sampler_HeightMap, uv).r;
-                return uv + viewDirTS.xy / (viewDirTS.z + 0.42) * (h * _HeightScale);
             }
 
             // ──────────────────────────────────────────────
