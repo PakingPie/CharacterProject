@@ -338,8 +338,7 @@ KnitResult EvaluateKnitSDF(
     float threadWidth,
     float jitterAmount,
     float bumpStrength,
-    float fadeStart,
-    float fadeEnd)
+    float2 screenPos)
 {
     KnitResult o = (KnitResult)0;
 
@@ -347,11 +346,51 @@ KnitResult EvaluateKnitSDF(
     // 1.  GRID
     // -------------------------------------------------------
     float loopsAcross = numberOfLoops * uvTiling;
-
-    // Cell grid — each cell holds one knit loop.
-    // loopAspect = cell height / cell width.
     float2 gridScale = float2(loopsAcross, loopsAcross / loopAspect);
     float2 gridUV = uv * gridScale;
+
+    // -------------------------------------------------------
+    // 2.  PIXEL FOOTPRINT  (anti-moiré core)
+    // -------------------------------------------------------
+    // Measure how many grid cells span one screen pixel.
+    // This drives all adaptive filtering below.
+    float2 gx = ddx(gridUV);
+    float2 gy = ddy(gridUV);
+    float cellsPerPx = max(length(float2(gx.x, gy.x)),
+                           length(float2(gx.y, gy.y)));
+
+    // Adaptive softness: widen the SDF transition to cover the
+    // pixel footprint.  This is the procedural equivalent of
+    // mip-level blurring — the gap/thread boundary naturally
+    // widens at distance so the SDF output can't alias.
+    //   Close:  adaptiveSoft ≈ openingSoftness  (artist setting)
+    //   Far:    adaptiveSoft grows to cover the pixel footprint
+    float adaptiveSoft = max(openingSoftness, cellsPerPx * 0.5);
+
+    // Ratio of original-to-adaptive softness (1 = no expansion)
+    float softRatio = openingSoftness / max(adaptiveSoft, 0.001);
+
+    // Pattern detail fade — derived automatically from softness
+    // expansion.  Squared for a smooth rolloff; hard Nyquist
+    // cutoff past 1.5 cells/px.
+    o.fade = softRatio * softRatio
+           * (1.0 - smoothstep(0.5, 1.5, cellsPerPx));
+
+    // Bump fades more aggressively — specular shimmering is
+    // far more perceptible than colour-level moiré.
+    float bumpFade = softRatio * softRatio * softRatio;
+
+    // -------------------------------------------------------
+    // 3.  STOCHASTIC JITTER  (transition-zone noise)
+    // -------------------------------------------------------
+    // A small per-pixel noise offset in grid space breaks the
+    // coherent periodic structure that causes moiré.  Active
+    // only when the pattern is starting to get small on screen
+    // (cellsPerPx > 0.15) and scales with the pixel footprint
+    // so it's invisible up close.
+    float ign = InterleavedGradientNoise(screenPos);
+    float stochasticActivation = smoothstep(0.15, 0.5, cellsPerPx);
+    gridUV += (ign - 0.5) * stochasticActivation * cellsPerPx * 0.4;
 
     // Brick offset on odd rows (half-cell shift)
     float rowIdx = floor(gridUV.y);
@@ -363,53 +402,44 @@ KnitResult EvaluateKnitSDF(
     float2 local = frac(gridUV) - 0.5;
 
     // -------------------------------------------------------
-    // 2.  MOIRE FADE
-    // -------------------------------------------------------
-    float2 gx = ddx(gridUV);
-    float2 gy = ddy(gridUV);
-    float cellsPerPx = max(length(float2(gx.x, gy.x)),
-                           length(float2(gx.y, gy.y)));
-    o.fade = 1.0 - smoothstep(fadeStart, fadeEnd, cellsPerPx);
-
-    // -------------------------------------------------------
-    // 3.  JITTER
+    // 4.  ARTISTIC JITTER  (per-cell opening position)
     // -------------------------------------------------------
     float2 jit = (KnitHash2(o.cellID) - 0.5) * 2.0 * jitterAmount;
     local -= jit;
 
     // -------------------------------------------------------
-    // 4.  SUPERELLIPTICAL GAP SDF
+    // 5.  SUPERELLIPTICAL GAP SDF
     // -------------------------------------------------------
-    float gapH = max(openingSize, 0.001);                 // vertical semi-axis
-    float gapW = max(openingSize * gapWidthRatio, 0.001); // horizontal semi-axis
+    float gapH = max(openingSize, 0.001);
+    float gapW = max(openingSize * gapWidthRatio, 0.001);
     float n = gapShapePower;
 
-    // Normalised position inside the gap shape
     float px = abs(local.x) / gapW;
     float py = abs(local.y) / gapH;
 
-    // Superellipse value:  0 at centre,  1 on boundary,  >1 outside
     float se = pow(pow(px, n) + pow(py, n), 1.0 / n);
 
-    // Approximate signed distance  (positive = inside gap)
     float minR = min(gapW, gapH);
     float gapDist = (1.0 - se) * minR;
 
     // -------------------------------------------------------
-    // 5.  MASKS
+    // 6.  MASKS  (using adaptive softness for anti-moiré)
     // -------------------------------------------------------
-    o.gapMask = smoothstep(-openingSoftness, openingSoftness, gapDist);
+    // The widened smoothstep is the key anti-alias mechanism:
+    // at distance the transition covers the whole pixel so the
+    // output can't produce high-frequency aliases.
+    o.gapMask = smoothstep(-adaptiveSoft, adaptiveSoft, gapDist);
     o.threadMask = 1.0 - o.gapMask;
     o.threadDist = abs(gapDist);
 
-    // Thread cross-section profile  (1 = at gap edge, 0 = deep in thread)
-    float tw = max(threadWidth, 0.001);
-    o.profile = saturate(1.0 - o.threadDist / tw);
+    // Thread cross-section profile — also widens at distance
+    // to prevent bump aliasing from a narrow profile peak.
+    float adaptiveTW = max(threadWidth, cellsPerPx * 0.3);
+    o.profile = saturate(1.0 - o.threadDist / adaptiveTW);
 
     // -------------------------------------------------------
-    // 6.  GRADIENT  (perpendicular to gap boundary)
+    // 7.  GRADIENT  (perpendicular to gap boundary)
     // -------------------------------------------------------
-    //  ∇ f  where f = ( |x/a|^n + |y/b|^n )^(1/n)
     float nm1 = max(n - 1.0, 0.01);
     float2 seGrad = float2(
         sign(local.x) * pow(max(px, 1e-6), nm1) / gapW,
@@ -418,17 +448,15 @@ KnitResult EvaluateKnitSDF(
     seGrad = (gl > 0.001) ? (seGrad / gl) : float2(0, 1);
 
     o.gapGradient = seGrad;
-    o.threadDir = float2(-seGrad.y, seGrad.x); // tangent along thread arc
+    o.threadDir = float2(-seGrad.y, seGrad.x);
 
     // -------------------------------------------------------
-    // 7.  BUMP NORMAL
+    // 8.  FREQUENCY-CLAMPED BUMP NORMAL
     // -------------------------------------------------------
-    // Round-yarn slope:  steep at gap edge, flat deep in thread
-    //   h(d) = sqrt(r² - d²)  =>  dh/dd = -d / sqrt(r² - d²)
-    // We use the profile for a softer approximation.
-
-    float bumpAmt = o.profile * bumpStrength * o.threadMask * o.fade;
-
+    // Bump amplitude decays as softRatio³ — much faster than
+    // the colour fade.  This prevents specular shimmering from
+    // high-frequency normals that the eye is very sensitive to.
+    float bumpAmt = o.profile * bumpStrength * o.threadMask * bumpFade;
     o.bumpNormal = normalize(float3(-seGrad * bumpAmt, 1.0));
 
     return o;

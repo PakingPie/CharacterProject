@@ -65,9 +65,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _GapWidthRatio ("Gap Width / Height Ratio", Range(0.5, 3.0)) = 1.5
         _ThreadWidth   ("Thread Bump Width", Range(0.005, 1.0)) = 0.06
 
-        _KnitFadeStart("Moire Fade Start (cells per px)", Range(0.01, 1.0)) = 0.2
-        _KnitFadeEnd("Moire Fade End   (cells per px)", Range(0.1, 2.0)) = 0.7
-
         [Header(Stretch Transparency)]
         _StretchTransparency("Stretch to Transparency", Range(0, 2)) = 0.5
         _StretchOpeningGrow("Stretch to Opening Grow", Range(0, 3)) = 1.5
@@ -437,8 +434,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     _ThreadWidth,
                     _KnitJitter,
                     _KnitNormalStrength,
-                    _KnitFadeStart,
-                    _KnitFadeEnd
+                    IN.positionCS.xy
                     );
 
                     // ── Fade-aware outputs ───────────────
@@ -875,8 +871,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float2 dKdy = ddy(scaled);
                 float  knitCoverage = max(length(dKdx), length(dKdy));
 
-                float adaptiveSoftness = _OpeningSoftness
-                + saturate(knitCoverage * 0.25) * 0.12;
+                // Pixel-footprint adaptive softness (matches forward pass logic)
+                float adaptiveSoftness = max(_OpeningSoftness, knitCoverage * 0.5);
 
                 float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
                 float openSize = _OpeningSize * stretchMod;
@@ -1039,8 +1035,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float2 dKdy = ddy(scaled);
                 float  knitCoverage = max(length(dKdx), length(dKdy));
 
-                float adaptiveSoftness = _OpeningSoftness
-                + saturate(knitCoverage * 0.25) * 0.12;
+                // Pixel-footprint adaptive softness (matches forward pass logic)
+                float adaptiveSoftness = max(_OpeningSoftness, knitCoverage * 0.5);
 
                 float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
                 float openSize = _OpeningSize * stretchMod;
