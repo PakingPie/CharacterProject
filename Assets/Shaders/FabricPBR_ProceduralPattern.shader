@@ -437,22 +437,50 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     IN.positionCS.xy
                     );
 
-                    // ── Fade-aware outputs ───────────────
-                    // Blend thread mask toward average at distance (moire suppression)
-                    knitThreadMask = lerp(knitAvgThread, knit.threadMask, knit.fade);
+                    // ── Far-field fabric noise ────────────
+                    // When the SDF pattern fades (below Nyquist), replace it
+                    // with smooth noise-based variation that preserves fabric
+                    // character.  This is the procedural equivalent of what
+                    // texture mipmapping provides — the pattern blurs rather
+                    // than vanishing to flat plastic.
+                    float farField = 1.0 - knit.fade;   // 0 close, 1 far
+                    // Use multiple octaves at low frequency (safe from aliasing)
+                    float2 farUV   = uv * 20.0;
+                    float fnoise1  = FabricNoiseValue(farUV);
+                    float fnoise2  = FabricNoiseValue(farUV * 1.7 + 31.5);
+                    // Medium-frequency octave for more fabric texture
+                    float fnoise3  = FabricNoiseValue(farUV * 4.3 + 17.2);
 
-                    // Edge mask: Gaussian peak at gap boundary for specular edge highlight
+                    // ── Thread mask ──────────────────────
+                    // SDF detail at close range, noise-modulated average at distance.
+                    // Stronger noise variation (±15%) so fabric character is clear.
+                    float noiseVar = ((fnoise1 - 0.5) * 0.15
+                                    + (fnoise3 - 0.5) * 0.08) * farField;
+                    knitThreadMask = lerp(knitAvgThread + noiseVar,
+                                         knit.threadMask, knit.fade);
+                    knitThreadMask = saturate(knitThreadMask);
+
+                    // Edge mask: Gaussian peak at gap boundary for specular
                     float edgeSigma = max(_OpeningSoftness * 0.7, 0.001);
-                    knitEdgeMask = exp(-pow(knit.threadDist / edgeSigma, 2.0)) * knit.fade;
+                    knitEdgeMask = exp(-pow(knit.threadDist / edgeSigma, 2.0))
+                                  * knit.fade;
 
                     // ── Bump normal ──────────────────────
-                    // knit.bumpNormal already includes _KnitNormalStrength and fade
+                    // SDF bump (already faded internally) + far-field fabric bump
                     normalTS.xy += knit.bumpNormal.xy;
+                    float farBump = 0.15 * _KnitNormalStrength * farField;
+                    normalTS.x += (fnoise1 - 0.5) * farBump;
+                    normalTS.y += (fnoise2 - 0.5) * farBump;
+                    normalTS.x += (fnoise3 - 0.5) * farBump * 0.5;
                     normalTS = normalize(normalTS);
 
                     // ── Thread darkening ─────────────────
-                    float darkening = (1.0 - knit.profile) * knit.threadMask * _ThreadDarken;
+                    float darkening = (1.0 - knit.profile) * knit.threadMask
+                                      * _ThreadDarken;
                     albedo *= 1.0 - darkening * knit.fade;
+                    // Far-field subtle color variation
+                    albedo *= 1.0 - (1.0 - fnoise1) * 0.04
+                              * _ThreadDarken * farField;
 
                     // ── Roughness variation ──────────────
                     float cellRand = KnitHash(knit.cellID);
@@ -465,6 +493,9 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     rVar += (fiberRnd - 0.5) * _KnitRoughnessVar * 0.5;
 
                     roughness += rVar * knit.threadMask * knit.fade;
+                    // Far-field roughness variation (fabric shimmer at distance)
+                    roughness += (fnoise1 - 0.5) * _KnitRoughnessVar
+                                 * 0.3 * farField;
                     roughness = clamp(roughness, 0.045, 1.0);
                 }
 
@@ -646,6 +677,24 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 specular = (D_direct * G_direct * F_direct)
                 / max(4.0 * nov * nol, 0.001);
 
+                // ── Fabric specular attenuation ──────────
+                // Real fabric fibers scatter light broadly — sharp GGX
+                // highlights from Cook-Torrance are wrong for textiles.
+                // Attenuate the GGX lobe and clearcoat when using the
+                // procedural knit, letting the sheen (Charlie/cloth BRDF)
+                // be the dominant specular.
+                float fabricSpecAtten = 1.0;
+                float fabricCCAtten   = 1.0;
+                if (_UseProceduralKnit > 0)
+                {
+                    // Thread mask controls attenuation: gaps show skin
+                    // behind (specular from skin is fine), thread areas
+                    // scatter light softly.  Suppresses GGX by ~85%.
+                    fabricSpecAtten = lerp(1.0, 0.15, knitThreadMask);
+                    fabricCCAtten   = lerp(1.0, 0.25, knitThreadMask);
+                }
+                specular *= fabricSpecAtten;
+
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
 
@@ -656,6 +705,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 clearcoat = EvaluateClearcoat(
                 _ClearCoat, 1.0 - _ClearCoatRoughness,
                 noh, hol, nov, nol);
+                clearcoat *= fabricCCAtten;
 
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
 
@@ -711,6 +761,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 aSpec = EvaluateSpecular(
                 normalWS, viewDirWS, light.direction,
                 tangentWS, F0, roughness, anisotropy);
+                aSpec *= fabricSpecAtten;
 
                 float3 aDiff = (1.0 - aF) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
@@ -722,6 +773,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 aCC = EvaluateClearcoat(
                 _ClearCoat, 1.0 - _ClearCoatRoughness,
                 aNoH, aHoL, nov, aNoL);
+                aCC *= fabricCCAtten;
 
                 float3 lightRad = light.color
                 * light.distanceAttenuation

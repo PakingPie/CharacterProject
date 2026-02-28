@@ -55,8 +55,6 @@ CBUFFER_START(UnityPerMaterial)
     float _GapShapePower;
     float _GapWidthRatio;
     float _ThreadWidth;
-    float  _KnitFadeStart;
-    float  _KnitFadeEnd;
 
     float  _StretchTransparency;
     float  _StretchOpeningGrow;
