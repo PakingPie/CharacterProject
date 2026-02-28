@@ -81,8 +81,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
         [Header(Denier Variation)]
         [Toggle] _UseDenierFromVertexR("Vertex Red = Denier Opacity", Float) = 0
-        _DenierMin("Min Denier Opacity", Range(0, 1)) = 0.3
-        _DenierMax("Max Denier Opacity", Range(0, 1)) = 1.0
+        // R=0 (thigh/calf, sheer) → opacity multiplied by this value.  0 = fully transparent.
+        // R=1 (ankle/knee, dense) → opacity unchanged (always 1.0 internally, never capped).
+        _DenierMin("Sheer Area Opacity  (R=0, thigh/calf)", Range(0, 1)) = 0.0
+        [HideInInspector] _DenierMax("Dense Area Opacity  (R=1, ankle/knee)", Range(0, 1)) = 1.0
 
         [Header(Clearcoat)]
         _ClearCoat("Clear Coat", Range(0,10)) = 0.0
@@ -270,6 +272,9 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
+
+                // return vertex colors for debug
+                // return float4(IN.vertexColor.r, 0, 0, 1);
 
                 float2 screenUV  = GetNormalizedScreenSpaceUV(IN.positionCS);
                 float3 viewDirWS = SafeNormalize(
@@ -492,7 +497,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 if (_UseDenierFromVertexR > 0)
                 {
-                    float denier = lerp(_DenierMin, _DenierMax,
+                    // lerp(_DenierMin, 1.0, R):
+                    //   R=0 (sheer zones: thigh/calf) → opacity *= _DenierMin  (near 0 = transparent)
+                    //   R=1 (dense zones: ankle/knee) → opacity *= 1.0         (no reduction)
+                    float denier = lerp(_DenierMin, 1.0,
                     IN.vertexColor.r);
                     opacity *= denier;
                 }
@@ -501,12 +509,12 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 {
                     float gapTransparency = lerp(_GapOpacity, 1.0, knitThreadMask);
                     opacity *= gapTransparency;
-                }
-
-                if (_UseProceduralKnit > 0)
-                {
-                    float stretchOpacity = lerp(1.0, 0.5, stretchAmount);
-                    opacity *= stretchOpacity;
+                    // NOTE: stretch transparency is NOT applied as a separate opacity
+                    // multiplier here. stretchAmount already feeds into stretchedOpening
+                    // → knitThreadMask → gapTransparency above, so the transparency
+                    // effect of stretching is fully captured there. A redundant
+                    // stretchOpacity multiplier would compress the entire denier range
+                    // uniformly across the mesh, killing per-vertex denier variation.
                 }
 
                 if (_FresnelOpacityStrength > 0)
@@ -527,6 +535,11 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     1.0 + layerMul);
                     opacity = 1.0 - transmittance;
                 }
+
+                // opacity = saturate(pow(opacity * 4.0, 4.0));
+
+                // // return opacity as red channel for debug
+                // return float4(opacity, 0, 0, 1);
 
                 // ── Sample scene behind (skin) ───────────
                 float3 sceneColor = SampleSceneColor(screenUV);
@@ -924,7 +937,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 opacity *= IN.vertexColor.a;
 
                 if (_UseDenierFromVertexR > 0)
-                opacity *= lerp(_DenierMin, _DenierMax, IN.vertexColor.r);
+                opacity *= lerp(_DenierMin, 1.0, IN.vertexColor.r);
 
                 opacity = saturate(opacity * _ShadowDensity);
 
@@ -1088,7 +1101,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 opacity *= IN.vertexColor.a;
 
                 if (_UseDenierFromVertexR > 0)
-                opacity *= lerp(_DenierMin, _DenierMax, IN.vertexColor.r);
+                opacity *= lerp(_DenierMin, 1.0, IN.vertexColor.r);
 
                 opacity = saturate(opacity * _ShadowDensity);
 
