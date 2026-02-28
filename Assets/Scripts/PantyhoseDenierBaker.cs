@@ -68,6 +68,30 @@ public class PantyhoseDenierBaker : MonoBehaviour
     [Range(0, 16)]
     public int smoothingPasses = 6;
 
+    // ─── Stretch (Green channel) ──────────────────────────────────────────────
+    [Header("Stretch (Green Channel)")]
+    [Tooltip("When enabled, the Green channel is written as the inverse of Red,\n" +
+             "so sheer areas (R=0) get high stretch (G≈1) and dense areas\n" +
+             "(R=1) get low stretch (G≈0).\n\n" +
+             "Enable '_UseStretchFromVertexG' on the material to use this.")]
+    public bool bakeStretchFromDenier = true;
+
+    [Tooltip("Power curve applied to the inverted R before writing G.\n" +
+             "1 = linear inverse.  >1 = stretch concentrates more in sheer areas.\n" +
+             "<1 = stretch spreads more evenly.")]
+    [Range(0.2f, 5f)]
+    public float stretchContrastPower = 1.5f;
+
+    [Tooltip("Maximum stretch value written to G (at R=0, fully sheer).\n" +
+             "1.0 = full stretch.  Lower values limit how much the openings grow.")]
+    [Range(0f, 1f)]
+    public float maxStretch = 0.85f;
+
+    [Tooltip("Minimum stretch value written to G (at R=1, fully dense).\n" +
+             "0.0 = no stretch.  Raise slightly if you want some stretch everywhere.")]
+    [Range(0f, 1f)]
+    public float minStretch = 0.0f;
+
 #if UNITY_EDITOR
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -167,7 +191,18 @@ public class PantyhoseDenierBaker : MonoBehaviour
             // Low  divergence (calf/thigh) → denierAtWidest    (dark)
             float r = Mathf.Lerp(denierAtWidest, denierAtNarrowest, curved);
 
-            newColors[i] = new Color(r, prev.g, prev.b, prev.a);
+            // Green channel: stretch from inverted denier
+            // R=0 (sheer/flat) → G=maxStretch (large openings)
+            // R=1 (dense/pinch) → G=minStretch (tight weave)
+            float g = prev.g;
+            if (bakeStretchFromDenier)
+            {
+                float invR = 1f - r;
+                float stretchCurved = Mathf.Pow(invR, stretchContrastPower);
+                g = Mathf.Lerp(minStretch, maxStretch, stretchCurved);
+            }
+
+            newColors[i] = new Color(r, g, prev.b, prev.a);
         }
 
         // ── Step 6: write to mesh ─────────────────────────────────────────────
@@ -317,10 +352,11 @@ public class PantyhoseDenierBakerEditor : Editor
         GUI.backgroundColor = prevBg;
 
         // Small hint label
-        EditorGUILayout.HelpBox(
-            "Writes vertex colors directly onto the mesh in-place (no asset copy created).\n" +
-            "Enable '_UseDenierFromVertexR' on the material to see the effect.",
-            MessageType.Info);
+        string helpMsg = "Writes vertex colors directly onto the mesh in-place (no asset copy created).\n" +
+            "R channel: denier (density) — enable '_UseDenierFromVertexR' on the material.";
+        if (baker.bakeStretchFromDenier)
+            helpMsg += "\nG channel: stretch (inverted denier) — enable '_UseStretchFromVertexG' on the material.";
+        EditorGUILayout.HelpBox(helpMsg, MessageType.Info);
     }
 }
 #endif // UNITY_EDITOR
