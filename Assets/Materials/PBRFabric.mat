@@ -106,7 +106,7 @@ Material:
     - _KnitNoiseScale: 10
     - _KnitNormalStrength: 1.5
     - _KnitRoughnessVar: 0
-    - _KnitUVTiling: 10
+    - _KnitUVTiling: 20
     - _LoopAspect: 1.5
     - _Metallic: 0
     - _NormalStrength: 1
@@ -123,7 +123,7 @@ Material:
     - _StretchOpeningGrow: 1.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _Subsurface: 1
+    - _Subsurface: 0
     - _ThreadDarken: 0.664
     - _ThreadWidth: 0.45
     - _TransmissionDistortion: 0.5

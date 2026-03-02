@@ -31,6 +31,7 @@ Material:
   - Use Metallic Map
   - Use Reflective Probe
   - _FORWARDZWRITE_ON
+  - _USEANALYTICSOFTNESS_ON
   - _USEDENIERFROMVERTEXR_ON
   - _USEPROCEDURALKNIT_ON
   - _USESTRETCHFROMVERTEXG_ON
@@ -85,11 +86,11 @@ Material:
     m_Floats:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.5
-    - _Anisotropy: 0.2
+    - _Anisotropy: 0
     - _ClearCoat: 1
-    - _ClearCoatRoughness: 0.2
+    - _ClearCoatRoughness: 0.7
     - _DenierMax: 1
-    - _DenierMin: 0.2
+    - _DenierMin: 0.05
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
@@ -99,42 +100,43 @@ Material:
     - _FuzzIntensity: 0
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
-    - _GapOpacity: 0.2
-    - _GapShapePower: 2.5
-    - _GapWidthRatio: 1
+    - _GapOpacity: 0
+    - _GapShapePower: 1
+    - _GapWidthRatio: 2
     - _HeightScale: 0.02
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 1
-    - _KnitJitter: 0
+    - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
     - _KnitNormalStrength: 1.5
-    - _KnitRoughnessVar: 0.2
+    - _KnitRoughnessVar: 0.3
     - _KnitUVTiling: 10
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.15
-    - _OpeningSoftness: 0.2
-    - _Roughness: 0.4
-    - _SeeThruTint: 0.85
-    - _ShadowDensity: 1.62
-    - _Sheen: 0.2
-    - _SheenRoughness: 0.5
+    - _OpeningSize: 0.2
+    - _OpeningSoftness: 0.1
+    - _Roughness: 0.68
+    - _SeeThruTint: 0.75
+    - _ShadowDensity: 1
+    - _Sheen: 0.55
+    - _SheenRoughness: 0.45
     - _SpecularTint: 0.3
     - _StretchOpeningGrow: 3
     - _StretchReference: 0.01
     - _StretchTransparency: 2
-    - _Subsurface: 0
+    - _Subsurface: 0.75
     - _ThreadDarken: 0.3
-    - _ThreadWidth: 0.358
+    - _ThreadWidth: 0.18
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 3
     - _TwoLayerDarkening: 1
     - _TwoLayerPower: 2
     - _TwoLayerSaturation: 1
     - _UseAOMap: 0
+    - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 1
@@ -153,7 +155,7 @@ Material:
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 0.9, b: 0.85, a: 1}
-    - _SubsurfaceColor: {r: 1, g: 0.90196085, b: 0.85098046, a: 1}
+    - _SubsurfaceColor: {r: 1, g: 0.72, b: 0.58, a: 1}
     - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

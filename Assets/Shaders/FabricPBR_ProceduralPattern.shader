@@ -52,6 +52,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _LoopAspect("Loop Height over Width", Range(0.5, 2.5)) = 1.3
         _OpeningSize("Opening Radius", Range(0.01, 0.45)) = 0.12
         _OpeningSoftness("Opening Edge Softness", Range(0.005, 0.3)) = 0.08
+        [Toggle] _UseAnalyticSoftness("Analytic fwidth Softness", Float) = 0
         _GapOpacity("Gap Min Opacity", Range(0, 1)) = 0.1
         _KnitNormalStrength("Knit Bump Strength", Range(0, 10)) = 1.5
         _KnitRoughnessVar("Thread Roughness Variation", Range(0, 0.3)) = 0.08
@@ -473,6 +474,21 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     normalTS.x += (fnoise1 - 0.5) * farBump;
                     normalTS.y += (fnoise2 - 0.5) * farBump;
                     normalTS.x += (fnoise3 - 0.5) * farBump * 0.5;
+
+                    // ── Yarn-loop micro-NDF: stochastic normal tilt ──────────
+                    // When cellsPerPx > 0 the resolved per-thread bump normal
+                    // starts fading (bumpFade). What should replace it is the
+                    // statistical distribution of yarn-loop surface normals —
+                    // which point in ALL tangent directions around the loop arc.
+                    // Model this as a per-pixel random tilt whose magnitude
+                    // grows with cellsPerPx: breaks the cylindrical macro-normal
+                    // pattern that causes the vertical GGX stripe.
+                    float yarnStochFade = smoothstep(0.05, 0.4, knit.cellsPerPx);
+                    float yarnAngle = InterleavedGradientNoise(IN.positionCS.xy + 17.3)
+                                      * 6.2831853;
+                    float yarnTilt  = yarnStochFade * knit.cellsPerPx * 0.3;
+                    normalTS.x += cos(yarnAngle) * yarnTilt;
+                    normalTS.y += sin(yarnAngle) * yarnTilt;
                     normalTS = normalize(normalTS);
 
                     // ── Thread darkening ─────────────────
@@ -498,6 +514,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     roughness += (fnoise1 - 0.5) * _KnitRoughnessVar
                                  * 0.3 * farField;
                     roughness = clamp(roughness, 0.045, 1.0);
+
+                    // ── Yarn-loop effective roughness ────────────────────────
+                    // Hardware mip filtering widens the effective BRDF as a
+                    // texture pattern goes sub-pixel (it integrates the NDF).
+                    // We replicate that here: roughness grows with cellsPerPx
+                    // so the GGX lobe broadens proportionally when yarn loops
+                    // are smaller than a pixel.
+                    roughness = saturate(roughness + knit.cellsPerPx * 0.35);
                 }
 
                 half3x3 tbnMatrix = half3x3(

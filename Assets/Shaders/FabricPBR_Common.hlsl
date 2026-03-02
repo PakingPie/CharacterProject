@@ -45,6 +45,7 @@ CBUFFER_START(UnityPerMaterial)
     float  _LoopAspect;
     float  _OpeningSize;
     float  _OpeningSoftness;
+    float  _UseAnalyticSoftness;
     float  _GapOpacity;
     float  _KnitNormalStrength;
     float  _KnitRoughnessVar;

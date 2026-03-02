@@ -360,12 +360,6 @@ KnitResult EvaluateKnitSDF(
                            length(float2(gx.y, gy.y)));
     o.cellsPerPx = cellsPerPx;
 
-    // Adaptive softness — scale strongly with pixel footprint
-    // to guarantee the smoothstep covers the full pixel.
-    // At high density the SDF MUST be blurry; the far-field
-    // noise in the fragment shader provides fabric character.
-    float adaptiveSoft = max(openingSoftness, cellsPerPx * 0.45);
-
     // SDF detail fade:
     //   < 0.3 cells/px  →  fully resolved, show SDF
     //   > 1.0 cells/px  →  fully below Nyquist → far-field
@@ -418,6 +412,16 @@ KnitResult EvaluateKnitSDF(
     // -------------------------------------------------------
     // 6.  MASKS  (adaptive softness for anti-aliasing)
     // -------------------------------------------------------
+    // Two modes, toggled by _UseAnalyticSoftness:
+    //   0 — cell-footprint:   cellsPerPx * 0.45  (original, global estimate)
+    //   1 — analytic fwidth:  fwidth(gapDist) * 0.5  (exact screen-space
+    //                         derivative of the SDF, reacts to perspective,
+    //                         oblique angles and UV stretch automatically)
+    // fwidth is kept soft with a cellsPerPx floor so sub-pixel fade still fires.
+    float softCell  = cellsPerPx * 0.45;
+    float softFwidh = fwidth(gapDist) * 0.5;
+    float adaptiveSoft = max(openingSoftness,
+                             lerp(softCell, max(softFwidh, cellsPerPx * 0.05), _UseAnalyticSoftness));
     o.gapMask = smoothstep(-adaptiveSoft, adaptiveSoft, gapDist);
     o.threadMask = 1.0 - o.gapMask;
     o.threadDist = abs(gapDist);
