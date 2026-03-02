@@ -1,6 +1,14 @@
 #ifndef CUSTOM_FABRIC_TEXTURE_BASED_UTILITIES_INCLUDED
 #define CUSTOM_FABRIC_TEXTURE_BASED_UTILITIES_INCLUDED
 
+// ── Interleaved Gradient Noise ────────────────
+// Matches the implementation in FabricPBR_ProceduralPattern_Utilities.hlsl
+// Used for per-pixel stochastic normal tilt (yarn-loop micro-NDF).
+float InterleavedGradientNoise(float2 screenPos)
+{
+    return frac(52.9829189 * frac(dot(screenPos, float2(0.06711056, 0.00583715))));
+}
+
 // ── SSAO ─────────────────────────────────────
 float2 SampleSSAO(float2 screenUV)
 {

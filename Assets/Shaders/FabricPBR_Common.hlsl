@@ -39,6 +39,14 @@ CBUFFER_START(UnityPerMaterial)
     float4 _FuzzColor;
     float  _FuzzPower;
 
+    // ── Fabric Micro-BRDF (texture-based shader) ──────────────────────
+    // _FabricSpecAttenuation: 0 = full fabric (85% GGX suppression),
+    //                         1 = standard PBR (no attenuation)
+    float  _FabricSpecAttenuation;
+    // _FabricMicroNDFStrength: scales the per-pixel stochastic normal tilt
+    //                          and roughness elevation from UV pixel footprint.
+    float  _FabricMicroNDFStrength;
+
     float  _UseProceduralKnit;
     float  _KnitUVTiling;
     float  _NumberOfLoops;

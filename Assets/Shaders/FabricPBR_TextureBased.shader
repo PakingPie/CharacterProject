@@ -44,6 +44,10 @@ Shader "Custom/FabricPBR_TextureBased"
         _HeightMap("Height Map", 2D) = "black" {}
         _HeightScale("Height Scale", Range(0, 0.1)) = 0.02
 
+        [Header(Fabric Micro BRDF)]
+        _FabricSpecAttenuation("GGX Attenuation (0=fabric  1=standard)", Range(0,1)) = 0.3
+        _FabricMicroNDFStrength("Yarn-Loop Normal Tilt Strength", Range(0,1)) = 0.5
+
         [Header(Sheen  (velvet  felt  not nylon))]
         _Sheen("Sheen Intensity", Range(0,1)) = 0.0
         _SheenColor("Sheen Color", Color) = (1,1,1,1)
@@ -330,7 +334,45 @@ Shader "Custom/FabricPBR_TextureBased"
                     normalTS = normalize(normalTS);
                 }
 
-                float fabricSpecMul = 1.0;
+                // ════════════════════════════════════════════
+                // Fabric Micro-BRDF  (mirrors ProceduralPattern)
+                // ════════════════════════════════════════════
+                // ── 1. Specular attenuation ──────────────────
+                // Real fabric fibers scatter GGX broadly. Attenuate the
+                // Cook-Torrance lobe and clearcoat, letting Charlie sheen
+                // dominate — identical logic to the procedural knit shader.
+                // _FabricSpecAttenuation: 0 = full fabric, 1 = standard PBR.
+                float fabricSpecAtten = lerp(0.15, 1.0, _FabricSpecAttenuation);
+                float fabricCCAtten   = lerp(0.25, 1.0, _FabricSpecAttenuation);
+                float fabricSpecMul   = fabricSpecAtten;
+
+                // ── 2. Yarn-loop micro-NDF ────────────────────
+                // Mip filtering corrects colour/normal at distance but the
+                // BRDF still receives the macro surface normal → vertical
+                // GGX stripe on any cylinder. Fix: per-pixel stochastic
+                // tilt whose magnitude grows with UV pixel footprint,
+                // mirroring the cellsPerPx logic in the procedural shader.
+                // texelsPerPx ≈ 1 when one 512-px texture cell spans one pixel.
+                {
+                    float2 uvDx = ddx(uv);
+                    float2 uvDy = ddy(uv);
+                    float  texelsPerPx = max(length(float2(uvDx.x, uvDy.x)),
+                                             length(float2(uvDx.y, uvDy.y))) * 512.0;
+
+                    float  yarnStochFade = smoothstep(0.05, 0.4, texelsPerPx)
+                                           * _FabricMicroNDFStrength;
+                    float  yarnAngle = InterleavedGradientNoise(IN.positionCS.xy + 17.3)
+                                       * 6.2831853;
+                    float  yarnTilt  = yarnStochFade * texelsPerPx * 0.3;
+                    normalTS.x += cos(yarnAngle) * yarnTilt;
+                    normalTS.y += sin(yarnAngle) * yarnTilt;
+                    normalTS = normalize(normalTS);
+
+                    // Roughness elevation: broadens lobe as yarn loops go
+                    // sub-pixel — analytic equivalent of mip-level blurring.
+                    roughness = saturate(roughness + texelsPerPx
+                                         * 0.35 * _FabricMicroNDFStrength);
+                }
 
                 half3x3 tbnMatrix = half3x3(
                 IN.tangentWS.xyz,
@@ -506,6 +548,7 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 clearcoat = EvaluateClearcoat(
                 clearcoatWeight, 1.0 - _ClearCoatRoughness,
                 noh, hol, specNoV, nol);                         // ← specNoV
+                clearcoat *= fabricCCAtten;
 
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
 
@@ -564,6 +607,7 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 aCC = EvaluateClearcoat(
                 clearcoatWeight, 1.0 - _ClearCoatRoughness,
                 aNoH, aHoL, specNoV, aNoL);
+                aCC *= fabricCCAtten;
 
                 float3 lightRad = light.color
                 * light.distanceAttenuation

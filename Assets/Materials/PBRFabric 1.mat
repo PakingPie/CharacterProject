@@ -83,13 +83,15 @@ Material:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.5
     - _Anisotropy: 0.2
-    - _ClearCoat: 4
+    - _ClearCoat: 1
     - _ClearCoatRoughness: 0.3
     - _DenierMax: 1
     - _DenierMin: 0.2
     - _DiffuseWrap: 0
     - _EnableEmission: 0
     - _F0: 0.04
+    - _FabricMicroNDFStrength: 0.5
+    - _FabricSpecAttenuation: 0.3
     - _ForwardZWrite: 0
     - _FresnelOpacityPower: 3
     - _FresnelOpacityStrength: 0.4
@@ -98,7 +100,7 @@ Material:
     - _HeightScale: 0.02
     - _Metallic: 0
     - _NormalStrength: 1.5
-    - _Opacity: 1
+    - _Opacity: 0.9
     - _Roughness: 0.5
     - _SeeThruTint: 0.75
     - _ShadowDensity: 1

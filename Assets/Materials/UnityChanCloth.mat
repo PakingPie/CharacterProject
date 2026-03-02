@@ -87,7 +87,7 @@ Material:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.25
     - _Anisotropy: 0
-    - _ClearCoat: 0.1
+    - _ClearCoat: 1
     - _ClearCoatRoughness: 0.7
     - _DenierMax: 1
     - _DenierMin: 0.05
@@ -100,36 +100,36 @@ Material:
     - _FuzzIntensity: 0
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
-    - _GapOpacity: 0.3
-    - _GapShapePower: 1
-    - _GapWidthRatio: 2
+    - _GapOpacity: 0
+    - _GapShapePower: 2
+    - _GapWidthRatio: 0.8
     - _HeightScale: 0.02
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 1
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1.5
+    - _KnitNormalStrength: 2
     - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 10
+    - _KnitUVTiling: 30
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.15
+    - _OpeningSize: 0.25
     - _OpeningSoftness: 0.1
     - _Roughness: 0.8
-    - _SeeThruTint: 0.287
+    - _SeeThruTint: 0.8
     - _ShadowDensity: 1
     - _Sheen: 0.55
     - _SheenRoughness: 0.45
     - _SpecularTint: 0.3
-    - _StretchOpeningGrow: 3
+    - _StretchOpeningGrow: 2
     - _StretchReference: 0.01
-    - _StretchTransparency: 2
-    - _Subsurface: 0.1
+    - _StretchTransparency: 1
+    - _Subsurface: 0
     - _ThreadDarken: 0.3
-    - _ThreadWidth: 0.18
+    - _ThreadWidth: 0.2
     - _TransmissionDistortion: 0.2
     - _TransmissionPower: 1.2
     - _TwoLayerDarkening: 1
@@ -150,7 +150,7 @@ Material:
     - _UseStretchFromVertexG: 1
     - _UseVertexAlpha: 0
     m_Colors:
-    - _BaseColor: {r: 0.3, g: 0.25, b: 0.2, a: 1}
+    - _BaseColor: {r: 0.25, g: 0.2, b: 0.15, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}

@@ -119,6 +119,119 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1001 &208678649
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -4300034340672891098, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -3566004673062225660, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 584185f725cc8ec4f816013ff6b5e2cc, type: 2}
+    - target: {fileID: 860951974369560786, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: 'm_Materials.Array.data[7]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 45f47006298912f4dbec4062603b460f, type: 2}
+    - target: {fileID: 860951974369560786, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: 'm_Materials.Array.data[8]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 8e526af249278a0498ce8273e07fcc49, type: 2}
+    - target: {fileID: 919132149155446097, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_Name
+      value: AnimateGirl_Pantyhose
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3184182198993219308, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: d8e545d9d552f3f459dcf985bf37652a, type: 2}
+    - target: {fileID: 3450836050442914133, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3450836050442914133, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 208678651}
+  m_SourcePrefab: {fileID: 100100000, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+--- !u!1 &208678650 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3450836050442914133, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+  m_PrefabInstance: {fileID: 208678649}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &208678651
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 208678650}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  denierAtNarrowest: 1
+  denierAtWidest: 0.3
+  contrastPower: 5
+  smoothingPasses: 5
+  bakeStretchFromDenier: 1
+  stretchContrastPower: 3
+  maxStretch: 1
+  minStretch: 0
 --- !u!1 &245879494
 GameObject:
   m_ObjectHideFlags: 0
@@ -682,7 +795,7 @@ PrefabInstance:
     - target: {fileID: -1188091215565785660, guid: e44f59a68481e8a448ea2493ee5464c1, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: d8e545d9d552f3f459dcf985bf37652a, type: 2}
+      objectReference: {fileID: 2100000, guid: 58552e64f98a8a940a99959e89712fe2, type: 2}
     - target: {fileID: 919132149155446097, guid: e44f59a68481e8a448ea2493ee5464c1, type: 3}
       propertyPath: m_Name
       value: Cloth
@@ -1392,8 +1505,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
-  denierAtNarrowest: 0.2
-  denierAtWidest: 0.8
+  denierAtNarrowest: 0.8
+  denierAtWidest: 0.2
   contrastPower: 1
   smoothingPasses: 4
   bakeStretchFromDenier: 1
@@ -1921,15 +2034,16 @@ SceneRoots:
   - {fileID: 330585546}
   - {fileID: 410087041}
   - {fileID: 832575519}
+  - {fileID: 1310922993}
   - {fileID: 1219544727}
   - {fileID: 362883721}
   - {fileID: 2070665981}
   - {fileID: 1082570926}
   - {fileID: 1081070259}
   - {fileID: 886113767}
-  - {fileID: 1310922993}
   - {fileID: 451787507}
   - {fileID: 840668013}
   - {fileID: 245879498}
   - {fileID: 923249246}
   - {fileID: 2029950415}
+  - {fileID: 208678649}
