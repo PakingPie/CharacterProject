@@ -525,7 +525,7 @@ Light:
   serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 2
+  m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -1297,7 +1297,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1941857682637440260, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1392,12 +1392,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
-  denierAtNarrowest: 0.3
-  denierAtWidest: 1
+  denierAtNarrowest: 0.2
+  denierAtWidest: 0.8
   contrastPower: 1
-  smoothingPasses: 8
-  bakeStretchFromDenier: 0
-  stretchContrastPower: 2
+  smoothingPasses: 4
+  bakeStretchFromDenier: 1
+  stretchContrastPower: 3
   maxStretch: 1
   minStretch: 0
 --- !u!1 &1082570922

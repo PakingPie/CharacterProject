@@ -273,7 +273,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 // return vertex colors for debug
                 // return float4(0, IN.vertexColor.g, 0, 1);
-                // return float4(IN.vertexColor.r, 0, 0, 1);
+                // return float4(IN.vertexColor.g, 0, 0, 1);
 
                 float2 screenUV  = GetNormalizedScreenSpaceUV(IN.positionCS);
                 float3 viewDirWS = SafeNormalize(
