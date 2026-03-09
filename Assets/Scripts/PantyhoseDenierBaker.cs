@@ -10,7 +10,32 @@ using UnityEditor;
 ///
 /// HOW IT WORKS
 /// ─────────────
-/// Uses per-vertex normal divergence to detect anatomical pinch points:
+/// Two bake modes are supported:
+///
+/// 1. Reference Area Stretch (more physical)
+///    Compares the current mesh against a rest/reference mesh with identical
+///    topology. Local triangle-area stretch is measured per vertex and mapped
+///    through fixed calibration thresholds.
+///
+///    Low area stretch   -> fabric stays dense -> bright R
+///    High area stretch  -> fabric thins out -> sheer -> dark R
+///
+///    Unlike the older implementation, this mode no longer normalises the
+///    current pose to its own min/max. That keeps the result interpretable
+///    across poses instead of expanding tiny changes into the full 0..1 range.
+///
+/// 2. Synthetic Circumference Stretch (practical for body-derived stockings)
+///    Uses the current mesh only. Each leg is sliced horizontally and local
+///    cross-section radius is compared against the narrowest slice radius.
+///
+///    Wider regions       -> more synthetic stretch -> lower denier -> dark R
+///    Narrower regions    -> less synthetic stretch -> higher denier -> bright R
+///
+///    This is not a true physical rest-garment simulation, but it works well
+///    when the stocking mesh was derived from the leg surface itself.
+///
+/// 3. Curvature Proxy (fallback / heuristic)
+///    Uses per-vertex normal divergence to detect anatomical pinch points:
 ///
 ///   For each vertex, the average angle between its own normal and the normals of
 ///   all its edge-connected neighbours is computed.
@@ -39,9 +64,51 @@ using UnityEditor;
 /// 2. Tune the fields below.
 /// 3. Click "▶ Bake Denier Vertex Colors" in the Inspector.
 /// </summary>
+public enum DenierBakeMode
+{
+    ReferenceAreaStretch,
+    SyntheticCircumferenceStretch,
+    CurvatureProxy
+}
+
 [RequireComponent(typeof(MeshFilter))]
 public class PantyhoseDenierBaker : MonoBehaviour
 {
+    // ─── Bake Source ─────────────────────────────────────────────────────────
+    [Header("Bake Source")]
+    [Tooltip("Reference Area Stretch is more physical: it compares the current mesh\n" +
+             "against a rest mesh with identical topology and bakes inverse local\n" +
+             "area stretch as denier. Curvature Proxy keeps the older heuristic.")]
+    public DenierBakeMode bakeMode = DenierBakeMode.ReferenceAreaStretch;
+
+    [Tooltip("Rest/reference mesh with the same vertex and triangle topology as\n" +
+             "the current mesh. Used only in Reference Area Stretch mode.")]
+    public Mesh referenceRestMesh;
+
+    [Header("Synthetic Stretch Source")]
+    [Tooltip("Number of horizontal Y slices used to estimate local leg width\n" +
+             "for Synthetic Circumference Stretch mode.")]
+    [Range(8, 256)]
+    public int syntheticSliceCount = 48;
+
+    [Tooltip("Scale applied to the narrowest slice radius when constructing the\n" +
+             "synthetic unstretched rest state. 1 = narrowest slice is treated as\n" +
+             "dense/rest. Values below 1 assume an even smaller unstretched garment\n" +
+             "and therefore produce more stretch overall.")]
+    [Range(0.5f, 1.2f)]
+    public float syntheticRestScale = 1.0f;
+
+    [Header("Reference Stretch Calibration")]
+    [Tooltip("Area-stretch ratio treated as dense / opaque.\n" +
+             "1.0 means the same local surface area as the rest mesh.")]
+    [Min(0.01f)]
+    public float areaStretchAtDense = 1.0f;
+
+    [Tooltip("Area-stretch ratio treated as sheer / transparent.\n" +
+             "Values at or above this clamp to denierAtWidest.")]
+    [Min(0.01f)]
+    public float areaStretchAtSheer = 1.25f;
+
     // ─── Denier Range ─────────────────────────────────────────────────────────
     [Header("Denier Range")]
     [Tooltip("R written at high-curvature areas (ankle, knee).\n" +
@@ -70,15 +137,17 @@ public class PantyhoseDenierBaker : MonoBehaviour
 
     // ─── Stretch (Green channel) ──────────────────────────────────────────────
     [Header("Stretch (Green Channel)")]
-    [Tooltip("When enabled, the Green channel is written as the inverse of Red,\n" +
-             "so sheer areas (R=0) get high stretch (G≈1) and dense areas\n" +
-             "(R=1) get low stretch (G≈0).\n\n" +
+    [Tooltip("When enabled, the Green channel is written for the shader's\n" +
+             "stretch/opening control. In Reference Area Stretch mode, G stores\n" +
+             "the calibrated measured stretch directly. In Curvature Proxy mode,\n" +
+             "G falls back to inverse denier.\n\n" +
              "Enable '_UseStretchFromVertexG' on the material to use this.")]
     public bool bakeStretchFromDenier = true;
 
-    [Tooltip("Power curve applied to the inverted R before writing G.\n" +
-             "1 = linear inverse.  >1 = stretch concentrates more in sheer areas.\n" +
-             "<1 = stretch spreads more evenly.")]
+    [Tooltip("Power curve applied before writing G.\n" +
+             "In Reference Area Stretch mode it shapes the measured stretch.\n" +
+             "In Curvature Proxy mode it shapes the inverse-denier fallback.\n" +
+             "1 = linear.  >1 = stretch concentrates more in high-stretch areas.")]
     [Range(0.2f, 5f)]
     public float stretchContrastPower = 1.5f;
 
@@ -127,9 +196,141 @@ public class PantyhoseDenierBaker : MonoBehaviour
         // them first so adjacency crosses seams correctly.
         List<int>[] adj = BuildAdjacency(vertCount, triangles, vertices);
 
-        // ── Step 2: per-vertex normal divergence ──────────────────────────────
-        // divergence[i] = average angle (radians) between vertex i's normal
-        // and each of its neighbours' normals.
+        // ── Step 2: build density metric ──────────────────────────────────────
+        float[] densityMetric;
+        string metricName;
+        bool useCalibratedStretchMetric = false;
+
+        if (bakeMode == DenierBakeMode.ReferenceAreaStretch)
+        {
+            if (!TryBuildAreaStretchMetric(sourceMesh, referenceRestMesh,
+                out densityMetric, out string failureReason))
+            {
+                Debug.LogWarning(
+                    "[DenierBaker] Reference Area Stretch mode could not be used: " +
+                    failureReason + " Falling back to Curvature Proxy.", this);
+
+                densityMetric = ComputeNormalDivergenceMetric(normals, adj);
+                metricName = "curvature-proxy";
+            }
+            else
+            {
+                metricName = "reference-area-stretch";
+                useCalibratedStretchMetric = true;
+            }
+        }
+        else if (bakeMode == DenierBakeMode.SyntheticCircumferenceStretch)
+        {
+            if (!TryBuildSyntheticCircumferenceStretchMetric(vertices,
+                out densityMetric, out string failureReason))
+            {
+                Debug.LogWarning(
+                    "[DenierBaker] Synthetic Circumference Stretch mode could not be used: " +
+                    failureReason + " Falling back to Curvature Proxy.", this);
+
+                densityMetric = ComputeNormalDivergenceMetric(normals, adj);
+                metricName = "curvature-proxy";
+            }
+            else
+            {
+                metricName = "synthetic-circumference-stretch";
+                useCalibratedStretchMetric = true;
+            }
+        }
+        else
+        {
+            densityMetric = ComputeNormalDivergenceMetric(normals, adj);
+            metricName = "curvature-proxy";
+        }
+
+        // ── Step 3: adjacency-weighted smoothing ──────────────────────────────
+        for (int pass = 0; pass < smoothingPasses; pass++)
+            SmoothOnGraph(densityMetric, adj);
+
+        // ── Step 4: gather metric range ───────────────────────────────────────
+        float minD = float.MaxValue, maxD = float.MinValue;
+        for (int i = 0; i < vertCount; i++)
+        {
+            if (densityMetric[i] < minD) minD = densityMetric[i];
+            if (densityMetric[i] > maxD) maxD = densityMetric[i];
+        }
+
+        float divRange = maxD - minD;
+        if (!useCalibratedStretchMetric && divRange < 1e-6f)
+        {
+            Debug.LogWarning(
+                "[DenierBaker] Density signal is flat. " +
+                "The mesh may not have meaningful curvature variation.", this);
+        }
+
+        // ── Step 5: build Color array ─────────────────────────────────────────
+        Color[] existingColors = sourceMesh.colors;
+        bool    hasColors      = existingColors != null && existingColors.Length == vertCount;
+        Color[] newColors      = new Color[vertCount];
+
+        for (int i = 0; i < vertCount; i++)
+        {
+            Color prev = hasColors ? existingColors[i] : new Color(0f, 0f, 0f, 1f);
+
+            float r;
+            float calibratedStretch = 0f;
+            if (useCalibratedStretchMetric)
+            {
+                float denseStretch = Mathf.Max(0.01f, areaStretchAtDense);
+                float sheerStretch = Mathf.Max(denseStretch + 1e-4f, areaStretchAtSheer);
+
+                // 0 = dense/rest-like, 1 = fully sheer from stretch.
+                calibratedStretch = Mathf.InverseLerp(denseStretch, sheerStretch, densityMetric[i]);
+                float curvedSheer = Mathf.Pow(calibratedStretch, contrastPower);
+                r = Mathf.Lerp(denierAtNarrowest, denierAtWidest, curvedSheer);
+            }
+            else
+            {
+                float norm = (divRange > 1e-6f) ? (densityMetric[i] - minD) / divRange : 0f;
+
+                // Power curve: sharpens high-curvature peaks, suppresses flat zones
+                float curved = Mathf.Pow(norm, contrastPower);
+
+                // High divergence (ankle/knee) → denierAtNarrowest (bright)
+                // Low  divergence (calf/thigh) → denierAtWidest    (dark)
+                r = Mathf.Lerp(denierAtWidest, denierAtNarrowest, curved);
+            }
+
+            // Green channel:
+            // - Reference Area Stretch mode: measured/calibrated stretch.
+            // - Curvature Proxy mode: inverse denier fallback.
+            float g = prev.g;
+            if (bakeStretchFromDenier)
+            {
+                float stretchSignal = useCalibratedStretchMetric
+                    ? calibratedStretch
+                    : 1f - r;
+                float stretchCurved = Mathf.Pow(stretchSignal, stretchContrastPower);
+                g = Mathf.Lerp(minStretch, maxStretch, stretchCurved);
+            }
+
+            newColors[i] = new Color(r, g, prev.b, prev.a);
+        }
+
+        // ── Step 6: write to mesh ─────────────────────────────────────────────
+        Undo.RecordObject(sourceMesh, "Bake Denier Vertex Colors");
+        sourceMesh.colors = newColors;
+        EditorUtility.SetDirty(sourceMesh);
+
+        Debug.Log(
+            $"[DenierBaker] Done. {metricName} bake on '{sourceMesh.name}'. " +
+            $"Smoothing passes: {smoothingPasses}, Contrast power: {contrastPower}, " +
+            $"metric range: [{minD:F4}, {maxD:F4}].",
+            this);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Helpers
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private static float[] ComputeNormalDivergenceMetric(Vector3[] normals, List<int>[] adj)
+    {
+        int vertCount = normals.Length;
         float[] divergence = new float[vertCount];
 
         for (int i = 0; i < vertCount; i++)
@@ -146,79 +347,224 @@ public class PantyhoseDenierBaker : MonoBehaviour
 
             foreach (int j in neighbours)
             {
-                float dot   = Mathf.Clamp(Vector3.Dot(ni, normals[j]), -1f, 1f);
-                sumAngle   += Mathf.Acos(dot); // radians in [0, π]
+                float dot = Mathf.Clamp(Vector3.Dot(ni, normals[j]), -1f, 1f);
+                sumAngle += Mathf.Acos(dot);
             }
 
             divergence[i] = sumAngle / neighbours.Count;
         }
 
-        // ── Step 3: adjacency-weighted smoothing ──────────────────────────────
-        for (int pass = 0; pass < smoothingPasses; pass++)
-            SmoothOnGraph(divergence, adj);
-
-        // ── Step 4: normalise to [0, 1] ───────────────────────────────────────
-        float minD = float.MaxValue, maxD = float.MinValue;
-        for (int i = 0; i < vertCount; i++)
-        {
-            if (divergence[i] < minD) minD = divergence[i];
-            if (divergence[i] > maxD) maxD = divergence[i];
-        }
-
-        float divRange = maxD - minD;
-        if (divRange < 1e-6f)
-        {
-            Debug.LogWarning(
-                "[DenierBaker] Normal divergence signal is flat. " +
-                "The mesh may not have meaningful curvature variation.", this);
-        }
-
-        // ── Step 5: build Color array ─────────────────────────────────────────
-        Color[] existingColors = sourceMesh.colors;
-        bool    hasColors      = existingColors != null && existingColors.Length == vertCount;
-        Color[] newColors      = new Color[vertCount];
-
-        for (int i = 0; i < vertCount; i++)
-        {
-            Color prev = hasColors ? existingColors[i] : new Color(0f, 0f, 0f, 1f);
-
-            float norm = (divRange > 1e-6f) ? (divergence[i] - minD) / divRange : 0f;
-
-            // Power curve: sharpens high-curvature peaks, suppresses flat zones
-            float curved = Mathf.Pow(norm, contrastPower);
-
-            // High divergence (ankle/knee) → denierAtNarrowest (bright)
-            // Low  divergence (calf/thigh) → denierAtWidest    (dark)
-            float r = Mathf.Lerp(denierAtWidest, denierAtNarrowest, curved);
-
-            // Green channel: stretch from inverted denier
-            // R=0 (sheer/flat) → G=maxStretch (large openings)
-            // R=1 (dense/pinch) → G=minStretch (tight weave)
-            float g = prev.g;
-            if (bakeStretchFromDenier)
-            {
-                float invR = 1f - r;
-                float stretchCurved = Mathf.Pow(invR, stretchContrastPower);
-                g = Mathf.Lerp(minStretch, maxStretch, stretchCurved);
-            }
-
-            newColors[i] = new Color(r, g, prev.b, prev.a);
-        }
-
-        // ── Step 6: write to mesh ─────────────────────────────────────────────
-        Undo.RecordObject(sourceMesh, "Bake Denier Vertex Colors");
-        sourceMesh.colors = newColors;
-        EditorUtility.SetDirty(sourceMesh);
-
-        Debug.Log(
-            $"[DenierBaker] Done. Normal-divergence bake on '{sourceMesh.name}'. " +
-            $"Smoothing passes: {smoothingPasses}, Contrast power: {contrastPower}.",
-            this);
+        return divergence;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // Helpers
-    // ══════════════════════════════════════════════════════════════════════════
+    private bool TryBuildSyntheticCircumferenceStretchMetric(
+        Vector3[] positions,
+        out float[] circumferenceStretch,
+        out string failureReason)
+    {
+        circumferenceStretch = null;
+        failureReason = string.Empty;
+
+        int vertCount = positions.Length;
+        if (vertCount == 0)
+        {
+            failureReason = "Mesh has no vertices.";
+            return false;
+        }
+
+        int sliceCount = Mathf.Max(8, syntheticSliceCount);
+
+        float minY = float.MaxValue;
+        float maxY = float.MinValue;
+        float minX = float.MaxValue;
+        float maxX = float.MinValue;
+
+        for (int i = 0; i < vertCount; i++)
+        {
+            Vector3 p = positions[i];
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+        }
+
+        float yRange = maxY - minY;
+        if (yRange < 1e-6f)
+        {
+            failureReason = "Mesh has no vertical Y extent for synthetic slicing.";
+            return false;
+        }
+
+        float centerX = (minX + maxX) * 0.5f;
+        int bucketCount = sliceCount * 2;
+
+        float[] sumX = new float[bucketCount];
+        float[] sumZ = new float[bucketCount];
+        int[] counts = new int[bucketCount];
+
+        for (int i = 0; i < vertCount; i++)
+        {
+            int bucket = GetSyntheticSliceBucket(positions[i], minY, yRange, centerX, sliceCount);
+            sumX[bucket] += positions[i].x;
+            sumZ[bucket] += positions[i].z;
+            counts[bucket]++;
+        }
+
+        Vector2[] centers = new Vector2[bucketCount];
+        for (int bucket = 0; bucket < bucketCount; bucket++)
+        {
+            if (counts[bucket] == 0)
+                continue;
+
+            float invCount = 1f / counts[bucket];
+            centers[bucket] = new Vector2(sumX[bucket] * invCount, sumZ[bucket] * invCount);
+        }
+
+        float[] radiusSum = new float[bucketCount];
+        for (int i = 0; i < vertCount; i++)
+        {
+            int bucket = GetSyntheticSliceBucket(positions[i], minY, yRange, centerX, sliceCount);
+            Vector2 dxz = new Vector2(positions[i].x, positions[i].z) - centers[bucket];
+            radiusSum[bucket] += dxz.magnitude;
+        }
+
+        float[] avgRadius = new float[bucketCount];
+        float[] minRadiusPerSide = { float.MaxValue, float.MaxValue };
+
+        for (int bucket = 0; bucket < bucketCount; bucket++)
+        {
+            if (counts[bucket] == 0)
+                continue;
+
+            avgRadius[bucket] = radiusSum[bucket] / counts[bucket];
+            if (avgRadius[bucket] <= 1e-6f)
+                continue;
+
+            int side = bucket / sliceCount;
+            if (avgRadius[bucket] < minRadiusPerSide[side])
+                minRadiusPerSide[side] = avgRadius[bucket];
+        }
+
+        if (minRadiusPerSide[0] == float.MaxValue && minRadiusPerSide[1] == float.MaxValue)
+        {
+            failureReason = "Could not determine slice radii for synthetic stretch.";
+            return false;
+        }
+
+        circumferenceStretch = new float[vertCount];
+        for (int i = 0; i < vertCount; i++)
+        {
+            int bucket = GetSyntheticSliceBucket(positions[i], minY, yRange, centerX, sliceCount);
+            int side = bucket / sliceCount;
+            float baseRadius = minRadiusPerSide[side];
+            if (baseRadius == float.MaxValue)
+                baseRadius = minRadiusPerSide[1 - side];
+
+            baseRadius = Mathf.Max(baseRadius * syntheticRestScale, 1e-6f);
+            float radius = avgRadius[bucket];
+            if (radius <= 1e-6f)
+            {
+                Vector2 dxz = new Vector2(positions[i].x, positions[i].z) - centers[bucket];
+                radius = dxz.magnitude;
+            }
+
+            circumferenceStretch[i] = radius / baseRadius;
+        }
+
+        return true;
+    }
+
+    private static int GetSyntheticSliceBucket(
+        Vector3 position,
+        float minY,
+        float yRange,
+        float centerX,
+        int sliceCount)
+    {
+        float y01 = Mathf.Clamp01((position.y - minY) / Mathf.Max(yRange, 1e-6f));
+        int slice = Mathf.Clamp(Mathf.FloorToInt(y01 * sliceCount), 0, sliceCount - 1);
+        int side = position.x >= centerX ? 1 : 0;
+        return side * sliceCount + slice;
+    }
+
+    private static bool TryBuildAreaStretchMetric(
+        Mesh currentMesh,
+        Mesh referenceMesh,
+        out float[] areaStretchMetric,
+        out string failureReason)
+    {
+        areaStretchMetric = null;
+        failureReason = string.Empty;
+
+        if (referenceMesh == null)
+        {
+            failureReason = "No reference rest mesh assigned.";
+            return false;
+        }
+
+        if (currentMesh.vertexCount != referenceMesh.vertexCount)
+        {
+            failureReason = "Vertex count does not match the reference mesh.";
+            return false;
+        }
+
+        int[] currTris = currentMesh.triangles;
+        int[] refTris = referenceMesh.triangles;
+
+        if (currTris.Length != refTris.Length)
+        {
+            failureReason = "Triangle count does not match the reference mesh.";
+            return false;
+        }
+
+        for (int i = 0; i < currTris.Length; i++)
+        {
+            if (currTris[i] != refTris[i])
+            {
+                failureReason = "Triangle topology does not match the reference mesh.";
+                return false;
+            }
+        }
+
+        Vector3[] currVerts = currentMesh.vertices;
+        Vector3[] refVerts = referenceMesh.vertices;
+        int vertCount = currVerts.Length;
+
+        float[] currAreas = new float[vertCount];
+        float[] refAreas = new float[vertCount];
+
+        for (int t = 0; t < currTris.Length; t += 3)
+        {
+            int ia = currTris[t];
+            int ib = currTris[t + 1];
+            int ic = currTris[t + 2];
+
+            float currArea = TriangleArea(currVerts[ia], currVerts[ib], currVerts[ic]) / 3f;
+            float refArea = TriangleArea(refVerts[ia], refVerts[ib], refVerts[ic]) / 3f;
+
+            currAreas[ia] += currArea;
+            currAreas[ib] += currArea;
+            currAreas[ic] += currArea;
+
+            refAreas[ia] += refArea;
+            refAreas[ib] += refArea;
+            refAreas[ic] += refArea;
+        }
+
+        areaStretchMetric = new float[vertCount];
+        for (int i = 0; i < vertCount; i++)
+        {
+            float areaStretch = currAreas[i] / Mathf.Max(refAreas[i], 1e-8f);
+            areaStretchMetric[i] = areaStretch;
+        }
+
+        return true;
+    }
+
+    private static float TriangleArea(Vector3 a, Vector3 b, Vector3 c)
+    {
+        return Vector3.Cross(b - a, c - a).magnitude * 0.5f;
+    }
 
     /// <summary>
     /// Builds a per-vertex adjacency list.
@@ -354,8 +700,18 @@ public class PantyhoseDenierBakerEditor : Editor
         // Small hint label
         string helpMsg = "Writes vertex colors directly onto the mesh in-place (no asset copy created).\n" +
             "R channel: denier (density) — enable '_UseDenierFromVertexR' on the material.";
+        if (baker.bakeMode == DenierBakeMode.ReferenceAreaStretch)
+            helpMsg += "\nBake mode: Reference Area Stretch — assign a rest mesh with matching topology. " +
+                $"Stretch {baker.areaStretchAtDense:F2} stays dense; stretch {baker.areaStretchAtSheer:F2} becomes sheer.";
+        else if (baker.bakeMode == DenierBakeMode.SyntheticCircumferenceStretch)
+            helpMsg += "\nBake mode: Synthetic Circumference Stretch — estimates stretch from horizontal leg width. " +
+                $"Rest scale: {baker.syntheticRestScale:F2}, slices: {baker.syntheticSliceCount}.";
+        else
+            helpMsg += "\nBake mode: Curvature Proxy — heuristic fallback, not physical thickness.";
         if (baker.bakeStretchFromDenier)
-            helpMsg += "\nG channel: stretch (inverted denier) — enable '_UseStretchFromVertexG' on the material.";
+            helpMsg += baker.bakeMode == DenierBakeMode.ReferenceAreaStretch
+                ? "\nG channel: calibrated measured stretch — enable '_UseStretchFromVertexG' on the material."
+                : "\nG channel: inverse denier fallback — enable '_UseStretchFromVertexG' on the material.";
         EditorGUILayout.HelpBox(helpMsg, MessageType.Info);
     }
 }

@@ -276,7 +276,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
 
                 // return vertex colors for debug
-                // return float4(IN.vertexColor.r, 0, 0, 1);
+                // return float4(IN.vertexColor.g, 0, 0, 1);
 
                 float2 screenUV  = GetNormalizedScreenSpaceUV(IN.positionCS);
                 float3 viewDirWS = SafeNormalize(

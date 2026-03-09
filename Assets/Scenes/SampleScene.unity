@@ -251,12 +251,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 1
+  referenceRestMesh: {fileID: 8195751398879750772, guid: dbf11699a45dd074686123b0e90270df, type: 3}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.15
   denierAtNarrowest: 1
-  denierAtWidest: 0.3
-  contrastPower: 3
-  smoothingPasses: 8
+  denierAtWidest: 0
+  contrastPower: 1
+  smoothingPasses: 4
   bakeStretchFromDenier: 1
-  stretchContrastPower: 3
+  stretchContrastPower: 1
   maxStretch: 1
   minStretch: 0
 --- !u!4 &208678652 stripped
@@ -873,6 +879,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 0
+  referenceRestMesh: {fileID: 0}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.25
   denierAtNarrowest: 0.4
   denierAtWidest: 1
   contrastPower: 1
@@ -1537,6 +1549,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 0
+  referenceRestMesh: {fileID: 0}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.25
   denierAtNarrowest: 0.8
   denierAtWidest: 0.2
   contrastPower: 1
@@ -1704,6 +1722,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 0
+  referenceRestMesh: {fileID: 0}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.25
   denierAtNarrowest: 1
   denierAtWidest: 0.3
   contrastPower: 3
@@ -1977,6 +2001,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 0
+  referenceRestMesh: {fileID: 0}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.25
   denierAtNarrowest: 1
   denierAtWidest: 0.3
   contrastPower: 3
@@ -2088,6 +2118,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 0
+  referenceRestMesh: {fileID: 0}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.25
   denierAtNarrowest: 1
   denierAtWidest: 0.3
   contrastPower: 3
