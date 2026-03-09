@@ -15,6 +15,33 @@ float2 SampleSSAO(float2 screenUV)
 }
 
 // ── IBL ──────────────────────────────────────
+struct IBLComponents
+{
+    float3 specular;
+    float3 diffuse;
+};
+
+IBLComponents CalculateIBLComponents(
+    float3 normalWS, float3 viewDirWS, float3 positionWS, float2 screenUV,
+    float3 albedo, float roughness,
+    float3 kS, float3 kD,
+    float2 brdf, float envLOD,
+    float3 bakedIrradiance)
+{
+    IBLComponents result = (IBLComponents)0;
+    result.diffuse = kD * albedo * bakedIrradiance;
+
+    if (_UseReflectiveProbe > 0)
+    {
+        float3 R = reflect(-viewDirWS, normalWS);
+        float3 prefiltered = GlossyEnvironmentReflection(
+            R, positionWS, roughness, 1.0, screenUV);
+        result.specular = prefiltered * (kS * brdf.x + brdf.y);
+    }
+
+    return result;
+}
+
 float3 CalculateIBL(
     float3 normalWS, float3 viewDirWS, float3 positionWS, float2 screenUV,
     float3 albedo, float roughness,
@@ -22,19 +49,14 @@ float3 CalculateIBL(
     float2 brdf, float envLOD,
     float3 bakedIrradiance)
 {
-    float3 envSpec = 0;
-    float3 envDiff = 0;
+    IBLComponents result = CalculateIBLComponents(
+        normalWS, viewDirWS, positionWS, screenUV,
+        albedo, roughness,
+        kS, kD,
+        brdf, envLOD,
+        bakedIrradiance);
 
-    if (_UseReflectiveProbe > 0)
-    {
-        float3 R = reflect(-viewDirWS, normalWS);
-        float3 prefiltered = GlossyEnvironmentReflection(
-            R, positionWS, roughness, 1.0, screenUV);
-        envSpec = prefiltered * (kS * brdf.x + brdf.y);
-        envDiff = kD * albedo * bakedIrradiance;
-    }
-
-    return envSpec + envDiff;
+    return result.specular + result.diffuse;
 }
 
 // ── BRDF Utilities ───────────────────────────
