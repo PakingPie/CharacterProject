@@ -31,6 +31,7 @@ Material:
   - Use Metallic Map
   - Use Normal Map
   - _USEDENIERFROMVERTEXR_ON
+  - _USESTRETCHFROMVERTEXG_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -93,16 +94,16 @@ Material:
     - _FabricMicroNDFStrength: 0.5
     - _FabricSpecAttenuation: 0.3
     - _ForwardZWrite: 0
-    - _FresnelOpacityPower: 3
-    - _FresnelOpacityStrength: 0.4
+    - _FresnelOpacityPower: 1
+    - _FresnelOpacityStrength: 0.5
     - _FuzzIntensity: 0.15
     - _FuzzPower: 3
     - _HeightScale: 0.02
     - _Metallic: 0
-    - _NormalStrength: 1.5
+    - _NormalStrength: 2
     - _Opacity: 1
     - _Roughness: 0.5
-    - _SeeThruTint: 0.9
+    - _SeeThruTint: 1
     - _ShadowDensity: 1
     - _Sheen: 0.12
     - _SheenRoughness: 0.2
@@ -126,7 +127,7 @@ Material:
     - _UseOpacityMap: 0
     - _UseReflectiveProbe: 0
     - _UseRoughnessMap: 0
-    - _UseStretchFromVertexG: 0
+    - _UseStretchFromVertexG: 1
     - _UseVertexAlpha: 0
     m_Colors:
     - _BaseColor: {r: 0.2, g: 0.15, b: 0.1, a: 1}

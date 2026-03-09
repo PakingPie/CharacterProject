@@ -85,17 +85,17 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _AmbientOcclusion: 0.1
+    - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.203
     - _Anisotropy: 0
-    - _ClearCoat: 0.2
-    - _ClearCoatRoughness: 0.2
+    - _ClearCoat: 0.5
+    - _ClearCoatRoughness: 0.3
     - _DenierMax: 1
-    - _DenierMin: 0.1
+    - _DenierMin: 0.05
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
-    - _FabricMicroNDFStrength: 1
+    - _FabricMicroNDFStrength: 0.8
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
     - _FresnelOpacityPower: 3
@@ -111,19 +111,19 @@ Material:
     - _KnitFadeStart: 1
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1
+    - _KnitNormalStrength: 0.5
     - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 20
+    - _KnitUVTiling: 10
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.12
-    - _OpeningSoftness: 0.05
-    - _Roughness: 1
+    - _OpeningSize: 0.15
+    - _OpeningSoftness: 0.3
+    - _Roughness: 0.1
     - _SeeThruTint: 0.9
-    - _ShadowDensity: 2
+    - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
     - _SpecularTint: 0

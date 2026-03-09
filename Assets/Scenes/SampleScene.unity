@@ -178,7 +178,7 @@ PrefabInstance:
     - target: {fileID: -3566004673062225660, guid: dbf11699a45dd074686123b0e90270df, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 584185f725cc8ec4f816013ff6b5e2cc, type: 2}
+      objectReference: {fileID: 2100000, guid: 2b777b4e1e5f0bd43afa29bc310d0dcb, type: 2}
     - target: {fileID: 860951974369560786, guid: dbf11699a45dd074686123b0e90270df, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
@@ -257,12 +257,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
   bakeMode: 1
   referenceRestMesh: {fileID: 8195751398879750772, guid: dbf11699a45dd074686123b0e90270df, type: 3}
-  syntheticSliceCount: 48
+  syntheticSliceCount: 64
   syntheticRestScale: 1
   areaStretchAtDense: 1
-  areaStretchAtSheer: 1.15
+  areaStretchAtSheer: 1.2
   denierAtNarrowest: 1
-  denierAtWidest: 0.2
+  denierAtWidest: 0
   contrastPower: 1
   smoothingPasses: 4
   bakeStretchFromDenier: 1
@@ -680,7 +680,7 @@ Light:
   serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 2
+  m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -1341,8 +1341,42 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5074706983615723607, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 886113769}
   m_SourcePrefab: {fileID: 100100000, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
+--- !u!1 &886113768 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5074706983615723607, guid: 51eae7e6602c7b24081805c6679ccb77, type: 3}
+  m_PrefabInstance: {fileID: 886113767}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &886113769
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 886113768}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 094a2d21d257954409261f34d42a726d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
+  bakeMode: 1
+  referenceRestMesh: {fileID: 0}
+  syntheticSliceCount: 48
+  syntheticRestScale: 1
+  areaStretchAtDense: 1
+  areaStretchAtSheer: 1.25
+  denierAtNarrowest: 1
+  denierAtWidest: 0
+  contrastPower: 2.5
+  smoothingPasses: 6
+  bakeStretchFromDenier: 1
+  stretchContrastPower: 1.5
+  maxStretch: 0.85
+  minStretch: 0
 --- !u!1 &923249242
 GameObject:
   m_ObjectHideFlags: 0
@@ -1671,11 +1705,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PantyhoseDenierBaker
   bakeMode: 1
   referenceRestMesh: {fileID: 0}
-  syntheticSliceCount: 48
+  syntheticSliceCount: 64
   syntheticRestScale: 1
   areaStretchAtDense: 1
   areaStretchAtSheer: 1.08
-  denierAtNarrowest: 0.8
+  denierAtNarrowest: 1
   denierAtWidest: 0.2
   contrastPower: 1
   smoothingPasses: 4

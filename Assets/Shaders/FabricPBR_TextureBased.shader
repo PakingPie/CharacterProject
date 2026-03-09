@@ -396,18 +396,31 @@ Shader "Custom/FabricPBR_TextureBased"
                 // Opacity pipeline
                 // ══════════════════════════════════════════
                 float opacity = _Opacity;
+                float surfaceCoverage = saturate(_Opacity);
+                float reflectSurfaceCoverage = surfaceCoverage;
+                float reflectFiberDensity = 1.0;
 
                 if (_UseOpacityMap > 0)
-                opacity *= SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, uv).r;
+                {
+                    float opacityTex = SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, uv).r;
+                    opacity *= opacityTex;
+                    surfaceCoverage *= opacityTex;
+                    reflectSurfaceCoverage *= opacityTex;
+                }
 
                 if (_UseVertexAlpha > 0)
-                opacity *= IN.vertexColor.a;
+                {
+                    opacity *= IN.vertexColor.a;
+                    surfaceCoverage *= IN.vertexColor.a;
+                    reflectSurfaceCoverage *= IN.vertexColor.a;
+                }
 
                 if (_UseDenierFromVertexR > 0)
                 {
                     float denier = lerp(_DenierMin, _DenierMax,
                     IN.vertexColor.r);
                     opacity *= denier;
+                    reflectFiberDensity *= denier;
                 }
 
                 if (_FresnelOpacityStrength > 0)
@@ -484,21 +497,26 @@ Shader "Custom/FabricPBR_TextureBased"
                 float2 brdf   = EnvBRDFApprox(roughness, specNoV);  // ← specNoV
                 float  envLOD = roughness * 6.0;
 
-                float3 ibl = CalculateIBL(
+                IBLComponents ibl = CalculateIBLComponents(
                 specNormalWS, viewDirWS, IN.positionWS, screenUV,  // ← specNormalWS
                 albedo, roughness,
                 kS, kD,
                 brdf, envLOD,
                 bakedIrradiance);
 
-                ibl *= ao;
+                float3 indirectBodyLighting = ibl.diffuse;
+                if (_UseCustomCubemap > 0)
+                {
+                    indirectBodyLighting *= indirectAO;
+                }
+                float3 indirectReflectLighting = ibl.specular * indirectAO;
 
                 if (_FuzzIntensity > 0)
                 {
                     float fuzzFresnel = pow(1.0 - nov, _FuzzPower);
                     float3 fuzz = _FuzzColor.rgb * _FuzzIntensity * fuzzFresnel;
                     float3 ambientLevel = max(bakedIrradiance, 0.05);
-                    ibl += fuzz * ambientLevel * ao;
+                    indirectReflectLighting += fuzz * ambientLevel * indirectAO;
                 }
 
                 if (_Subsurface > 0 && _AmbientTransmission > 0)
@@ -507,7 +525,7 @@ Shader "Custom/FabricPBR_TextureBased"
                     float3 indirectTrans  = _Subsurface * _AmbientTransmission
                     * _SubsurfaceColor.rgb
                     * backIrradiance * rcp(PI);
-                    ibl += indirectTrans * ao;
+                    indirectBodyLighting += indirectTrans * indirectAO;
                 }
 
                 float3 emission = _EnableEmission > 0
@@ -552,10 +570,10 @@ Shader "Custom/FabricPBR_TextureBased"
 
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
 
-                float3 mainLighting = diffuse * nolWrap * mainRadiance
-                + (specular + sheen + clearcoat) * nol * mainRadiance;
+                float3 mainBodyLighting = diffuse * nolWrap * mainRadiance;
+                float3 mainReflectLighting = (specular + sheen + clearcoat) * nol * mainRadiance;
 
-                mainLighting += EvaluateTransmission(
+                mainBodyLighting += EvaluateTransmission(
                 normalWS, viewDirWS, mainLight.direction,
                 mainLight.color,
                 _Subsurface, _SubsurfaceColor.rgb,
@@ -564,7 +582,8 @@ Shader "Custom/FabricPBR_TextureBased"
                 // ══════════════════════════════════════════
                 //  ADDITIONAL LIGHTS
                 // ══════════════════════════════════════════
-                float3 addLighting = 0;
+                float3 addBodyLighting = 0;
+                float3 addReflectLighting = 0;
                 float4 shadowMask  = inputData.shadowMask;
                 uint   pixelLightCount = GetAdditionalLightsCount();
 
@@ -613,10 +632,10 @@ Shader "Custom/FabricPBR_TextureBased"
                 * light.distanceAttenuation
                 * light.shadowAttenuation;
 
-                addLighting += aDiff * aNoLWrap * lightRad
-                + (aSpec + aSheen + aCC) * aNoL * lightRad;
+                addBodyLighting += aDiff * aNoLWrap * lightRad;
+                addReflectLighting += (aSpec + aSheen + aCC) * aNoL * lightRad;
 
-                addLighting += EvaluateTransmission(
+                addBodyLighting += EvaluateTransmission(
                 normalWS, viewDirWS, light.direction,
                 light.color * light.distanceAttenuation,
                 _Subsurface, _SubsurfaceColor.rgb,
@@ -626,17 +645,33 @@ Shader "Custom/FabricPBR_TextureBased"
                 // ══════════════════════════════════════════
                 //  FINAL COMPOSITION
                 // ══════════════════════════════════════════
-                float3 fabricColor = ibl + mainLighting + addLighting + emission;
+                float3 fabricBodyColor = indirectBodyLighting
+                + mainBodyLighting
+                + addBodyLighting
+                + emission;
+
+                float3 fabricReflectColor = indirectReflectLighting
+                + mainReflectLighting
+                + addReflectLighting;
 
                 if (_TwoLayerDarkening > 0)
                 {
                     float edgeDarken = 1.0 - twoLayerGrazing * 0.35;
-                    fabricColor *= edgeDarken;
+                    fabricBodyColor *= edgeDarken;
+                    fabricReflectColor *= edgeDarken;
                 }
 
-                fabricColor = MixFog(fabricColor, IN.fogFactor);
+                fabricBodyColor = MixFog(fabricBodyColor, IN.fogFactor);
+                fabricReflectColor = MixFog(fabricReflectColor, IN.fogFactor);
 
-                float3 finalColor = lerp(tintedScene, fabricColor, opacity);
+                float frontalFiberCoverage = saturate(reflectSurfaceCoverage);
+                float coverageForDepth = min(frontalFiberCoverage, 0.999);
+                float fiberOpticalDepth = -log(max(1.0 - coverageForDepth, 0.001))
+                                        * reflectFiberDensity;
+                float reflectCoverage = 1.0 - exp(-fiberOpticalDepth / max(specNoV, 0.001));
+
+                float3 finalColor = lerp(tintedScene, fabricBodyColor, opacity)
+                + fabricReflectColor * reflectCoverage;
 
                 return float4(finalColor, saturate(opacity));
             }
