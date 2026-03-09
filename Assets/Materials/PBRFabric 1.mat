@@ -86,7 +86,7 @@ Material:
     - _ClearCoat: 1
     - _ClearCoatRoughness: 0.3
     - _DenierMax: 1
-    - _DenierMin: 0.2
+    - _DenierMin: 0.3
     - _DiffuseWrap: 0
     - _EnableEmission: 0
     - _F0: 0.04
@@ -100,9 +100,9 @@ Material:
     - _HeightScale: 0.02
     - _Metallic: 0
     - _NormalStrength: 1.5
-    - _Opacity: 0.9
+    - _Opacity: 1
     - _Roughness: 0.5
-    - _SeeThruTint: 0.75
+    - _SeeThruTint: 0.9
     - _ShadowDensity: 1
     - _Sheen: 0.12
     - _SheenRoughness: 0.2
@@ -110,7 +110,7 @@ Material:
     - _StretchOpeningGrow: 1.5
     - _StretchReference: 0.01
     - _StretchTransparency: 0.5
-    - _Subsurface: 1
+    - _Subsurface: 0.1
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 4
     - _TwoLayerDarkening: 0.4
@@ -129,7 +129,7 @@ Material:
     - _UseStretchFromVertexG: 0
     - _UseVertexAlpha: 0
     m_Colors:
-    - _BaseColor: {r: 0.21509439, g: 0.18790321, b: 0.18790321, a: 1}
+    - _BaseColor: {r: 0.2, g: 0.15, b: 0.1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
