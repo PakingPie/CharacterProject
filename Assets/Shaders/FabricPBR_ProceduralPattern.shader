@@ -549,6 +549,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float opacity = _Opacity * _BaseColor.a;
                 float surfaceCoverage = saturate(_Opacity * _BaseColor.a);
                 float reflectSurfaceCoverage = surfaceCoverage;
+                float reflectFiberDensity = 1.0;
 
                 if (_UseVertexAlpha > 0)
                 {
@@ -566,9 +567,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     IN.vertexColor.r);
                     opacity *= denier;
 
-                    // Sheer fabric still reflects at the front surface, but it
-                    // should not remain a full reflective shell when density drops.
-                    reflectSurfaceCoverage *= sqrt(denier);
+                    // Denier is treated as a fiber density proxy for front-surface
+                    // reflection. It scales optical depth later rather than directly
+                    // scaling the projected fiber area.
+                    reflectFiberDensity *= denier;
                 }
 
                 if (_UseProceduralKnit > 0)
@@ -867,8 +869,11 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // Projected fiber coverage increases toward grazing angles,
                 // so front-surface reflection should fade much less than
                 // body transmission in sheer regions.
-                float grazingBoost = lerp(1.0, 1.35, 1.0 - nov);
-                float reflectCoverage = saturate(reflectSurfaceCoverage * grazingBoost);
+                float frontalFiberCoverage = saturate(reflectSurfaceCoverage);
+                float coverageForDepth = min(frontalFiberCoverage, 0.999);
+                float fiberOpticalDepth = -log(max(1.0 - coverageForDepth, 0.001))
+                                        * reflectFiberDensity;
+                float reflectCoverage = 1.0 - exp(-fiberOpticalDepth / max(nov, 0.001));
 
                 float3 finalColor = lerp(tintedScene, fabricBodyColor, opacity)
                 + fabricReflectColor * reflectCoverage;

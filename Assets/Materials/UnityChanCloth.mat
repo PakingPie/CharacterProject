@@ -30,6 +30,7 @@ Material:
   - Use Height Map
   - Use Metallic Map
   - Use Reflective Probe
+  - Use Vertex Alpha
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
   - _USEDENIERFROMVERTEXR_ON
@@ -84,13 +85,13 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _AmbientOcclusion: 1
+    - _AmbientOcclusion: 0.1
     - _AmbientTransmission: 0.203
     - _Anisotropy: 0
-    - _ClearCoat: 0.1
+    - _ClearCoat: 0.2
     - _ClearCoatRoughness: 0.2
     - _DenierMax: 1
-    - _DenierMin: 0.2
+    - _DenierMin: 0.1
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
@@ -101,41 +102,41 @@ Material:
     - _FresnelOpacityStrength: 1
     - _FuzzIntensity: 0
     - _FuzzPower: 3
-    - _GapEdgeHighlight: 0.1
+    - _GapEdgeHighlight: 0
     - _GapOpacity: 1
     - _GapShapePower: 2.5
-    - _GapWidthRatio: 1
+    - _GapWidthRatio: 1.2
     - _HeightScale: 0.02
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 1
-    - _KnitJitter: 0.1
+    - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1.5
+    - _KnitNormalStrength: 1
     - _KnitRoughnessVar: 0.3
     - _KnitUVTiling: 20
-    - _LoopAspect: 1
+    - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.25
+    - _OpeningSize: 0.12
     - _OpeningSoftness: 0.05
-    - _Roughness: 0.2
+    - _Roughness: 1
     - _SeeThruTint: 0.9
-    - _ShadowDensity: 1
+    - _ShadowDensity: 2
     - _Sheen: 0
     - _SheenRoughness: 0.45
-    - _SpecularTint: 0.3
-    - _StretchOpeningGrow: 0.8
+    - _SpecularTint: 0
+    - _StretchOpeningGrow: 1
     - _StretchReference: 0.01
     - _StretchTransparency: 1
     - _Subsurface: 0
-    - _ThreadDarken: 0.4
-    - _ThreadWidth: 0.2
+    - _ThreadDarken: 1
+    - _ThreadWidth: 1
     - _TransmissionDistortion: 0.2
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
-    - _TwoLayerPower: 2
+    - _TwoLayerPower: 1
     - _TwoLayerSaturation: 1
     - _UseAOMap: 0
     - _UseAnalyticSoftness: 1
@@ -150,9 +151,9 @@ Material:
     - _UseReflectiveProbe: 1
     - _UseRoughnessMap: 0
     - _UseStretchFromVertexG: 1
-    - _UseVertexAlpha: 0
+    - _UseVertexAlpha: 1
     m_Colors:
-    - _BaseColor: {r: 0.25, g: 0.2, b: 0.15, a: 1}
+    - _BaseColor: {r: 0.25, g: 0.2, b: 0.2, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
