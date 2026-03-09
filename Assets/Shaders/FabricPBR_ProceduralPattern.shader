@@ -548,11 +548,13 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // ══════════════════════════════════════════
                 float opacity = _Opacity * _BaseColor.a;
                 float surfaceCoverage = saturate(_Opacity * _BaseColor.a);
+                float reflectSurfaceCoverage = surfaceCoverage;
 
                 if (_UseVertexAlpha > 0)
                 {
                 opacity *= IN.vertexColor.a;
                 surfaceCoverage *= IN.vertexColor.a;
+                reflectSurfaceCoverage *= IN.vertexColor.a;
                 }
 
                 if (_UseDenierFromVertexR > 0)
@@ -563,6 +565,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     float denier = lerp(_DenierMin, 1.0,
                     IN.vertexColor.r);
                     opacity *= denier;
+
+                    // Sheer fabric still reflects at the front surface, but it
+                    // should not remain a full reflective shell when density drops.
+                    reflectSurfaceCoverage *= sqrt(denier);
                 }
 
                 if (_UseProceduralKnit > 0)
@@ -570,6 +576,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     float gapTransparency = lerp(_GapOpacity, 1.0, knitThreadMask);
                     opacity *= gapTransparency;
                     surfaceCoverage *= gapTransparency;
+                    reflectSurfaceCoverage *= knitThreadMask;
                     // NOTE: stretch transparency is NOT applied as a separate opacity
                     // multiplier here. stretchAmount already feeds into stretchedOpening
                     // → knitThreadMask → gapTransparency above, so the transparency
@@ -860,7 +867,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // Projected fiber coverage increases toward grazing angles,
                 // so front-surface reflection should fade much less than
                 // body transmission in sheer regions.
-                float reflectCoverage = saturate(surfaceCoverage / max(sqrt(nov), 0.35));
+                float grazingBoost = lerp(1.0, 1.35, 1.0 - nov);
+                float reflectCoverage = saturate(reflectSurfaceCoverage * grazingBoost);
 
                 float3 finalColor = lerp(tintedScene, fabricBodyColor, opacity)
                 + fabricReflectColor * reflectCoverage;
