@@ -548,14 +548,11 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // ══════════════════════════════════════════
                 float opacity = _Opacity * _BaseColor.a;
                 float surfaceCoverage = saturate(_Opacity * _BaseColor.a);
-                float reflectSurfaceCoverage = surfaceCoverage;
-                float reflectFiberDensity = 1.0;
 
                 if (_UseVertexAlpha > 0)
                 {
                 opacity *= IN.vertexColor.a;
                 surfaceCoverage *= IN.vertexColor.a;
-                reflectSurfaceCoverage *= IN.vertexColor.a;
                 }
 
                 if (_UseDenierFromVertexR > 0)
@@ -566,11 +563,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     float denier = lerp(_DenierMin, 1.0,
                     IN.vertexColor.r);
                     opacity *= denier;
-
-                    // Denier is treated as a fiber density proxy for front-surface
-                    // reflection. It scales optical depth later rather than directly
-                    // scaling the projected fiber area.
-                    reflectFiberDensity *= denier;
                 }
 
                 if (_UseProceduralKnit > 0)
@@ -578,7 +570,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     float gapTransparency = lerp(_GapOpacity, 1.0, knitThreadMask);
                     opacity *= gapTransparency;
                     surfaceCoverage *= gapTransparency;
-                    reflectSurfaceCoverage *= knitThreadMask;
                     // NOTE: stretch transparency is NOT applied as a separate opacity
                     // multiplier here. stretchAmount already feeds into stretchedOpening
                     // → knitThreadMask → gapTransparency above, so the transparency
@@ -869,11 +860,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // Projected fiber coverage increases toward grazing angles,
                 // so front-surface reflection should fade much less than
                 // body transmission in sheer regions.
-                float frontalFiberCoverage = saturate(reflectSurfaceCoverage);
-                float coverageForDepth = min(frontalFiberCoverage, 0.999);
-                float fiberOpticalDepth = -log(max(1.0 - coverageForDepth, 0.001))
-                                        * reflectFiberDensity;
-                float reflectCoverage = 1.0 - exp(-fiberOpticalDepth / max(nov, 0.001));
+                float reflectCoverage = saturate(surfaceCoverage / max(sqrt(nov), 0.35));
 
                 float3 finalColor = lerp(tintedScene, fabricBodyColor, opacity)
                 + fabricReflectColor * reflectCoverage;

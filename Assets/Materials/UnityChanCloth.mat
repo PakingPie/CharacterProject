@@ -30,7 +30,6 @@ Material:
   - Use Height Map
   - Use Metallic Map
   - Use Reflective Probe
-  - Use Vertex Alpha
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
   - _USEDENIERFROMVERTEXR_ON
@@ -87,15 +86,15 @@ Material:
     m_Floats:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.203
-    - _Anisotropy: 0
-    - _ClearCoat: 0.5
-    - _ClearCoatRoughness: 0.3
+    - _Anisotropy: 0.2
+    - _ClearCoat: 0.2
+    - _ClearCoatRoughness: 0.1
     - _DenierMax: 1
     - _DenierMin: 0.05
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
-    - _FabricMicroNDFStrength: 0.8
+    - _FabricMicroNDFStrength: 1
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
     - _FresnelOpacityPower: 3
@@ -105,38 +104,38 @@ Material:
     - _GapEdgeHighlight: 0
     - _GapOpacity: 1
     - _GapShapePower: 2.5
-    - _GapWidthRatio: 1.2
+    - _GapWidthRatio: 0.5
     - _HeightScale: 0.02
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 1
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 0.5
+    - _KnitNormalStrength: 1
     - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 10
+    - _KnitUVTiling: 20
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.15
-    - _OpeningSoftness: 0.3
-    - _Roughness: 0.1
-    - _SeeThruTint: 0.9
+    - _OpeningSize: 0.12
+    - _OpeningSoftness: 0.2
+    - _Roughness: 0.3
+    - _SeeThruTint: 0.906
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
     - _SpecularTint: 0
-    - _StretchOpeningGrow: 1
+    - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
     - _Subsurface: 0
     - _ThreadDarken: 1
-    - _ThreadWidth: 1
+    - _ThreadWidth: 0.35
     - _TransmissionDistortion: 0.2
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
-    - _TwoLayerPower: 1
+    - _TwoLayerPower: 3
     - _TwoLayerSaturation: 1
     - _UseAOMap: 0
     - _UseAnalyticSoftness: 1
@@ -151,7 +150,7 @@ Material:
     - _UseReflectiveProbe: 1
     - _UseRoughnessMap: 0
     - _UseStretchFromVertexG: 1
-    - _UseVertexAlpha: 1
+    - _UseVertexAlpha: 0
     m_Colors:
     - _BaseColor: {r: 0.25, g: 0.2, b: 0.2, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
