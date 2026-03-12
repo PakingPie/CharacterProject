@@ -30,6 +30,7 @@ Material:
   - Use Height Map
   - Use Metallic Map
   - Use Reflective Probe
+  - _ANISOTROPIC
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
   - _USEDENIERFROMVERTEXR_ON
@@ -86,7 +87,9 @@ Material:
     m_Floats:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.203
-    - _Anisotropy: 0.2
+    - _AnisotropicIntensity: 1
+    - _AnisotropicRoughness: 1
+    - _Anisotropy: 0
     - _ClearCoat: 0.2
     - _ClearCoatRoughness: 0.1
     - _DenierMax: 1
@@ -94,7 +97,7 @@ Material:
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
-    - _FabricMicroNDFStrength: 1
+    - _FabricMicroNDFStrength: 0.542
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
     - _FresnelOpacityPower: 3
@@ -104,24 +107,24 @@ Material:
     - _GapEdgeHighlight: 0
     - _GapOpacity: 1
     - _GapShapePower: 2.5
-    - _GapWidthRatio: 0.5
+    - _GapWidthRatio: 1.5
     - _HeightScale: 0.02
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 1
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
     - _KnitNormalStrength: 1
-    - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 20
+    - _KnitRoughnessVar: 0
+    - _KnitUVTiling: 16
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.12
+    - _OpeningSize: 0.02
     - _OpeningSoftness: 0.2
-    - _Roughness: 0.3
-    - _SeeThruTint: 0.906
+    - _Roughness: 0.202
+    - _SeeThruTint: 0.9
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
@@ -130,8 +133,8 @@ Material:
     - _StretchReference: 0.01
     - _StretchTransparency: 1
     - _Subsurface: 0
-    - _ThreadDarken: 1
-    - _ThreadWidth: 0.35
+    - _ThreadDarken: 0.8
+    - _ThreadWidth: 0.3
     - _TransmissionDistortion: 0.2
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
@@ -151,7 +154,9 @@ Material:
     - _UseRoughnessMap: 0
     - _UseStretchFromVertexG: 1
     - _UseVertexAlpha: 0
+    - _UseWardAnisotropic: 1
     m_Colors:
+    - _AnisotropicDirection: {r: 1, g: 0, b: 0, a: 0}
     - _BaseColor: {r: 0.25, g: 0.2, b: 0.2, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}

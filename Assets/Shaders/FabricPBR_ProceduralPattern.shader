@@ -152,6 +152,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             #pragma multi_compile_instancing
 
             #include "./FabricPBR_ProceduralPattern_Utilities.hlsl"
+            #include "./FabricPBR_KnitSurface.hlsl"
 
             // ── Structs ──────────────────────────────────
             struct Attributes
@@ -297,236 +298,19 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // ── Normal ───────────────────────────────
                 half3 normalTS = half3(0, 0, 1);
 
-                // // ══════════════════════════════════════════
-                // //   PROCEDURAL KNIT INTEGRATION
-                // // ══════════════════════════════════════════
-                // float knitThreadMask = 1.0;
-                // float knitEdgeMask   = 0.0;
-                // float stretchAmount  = 0.0;
-                // float knitAvgThread  = 1.0;
-
-                // if (_UseProceduralKnit > 0)
-                // {
-                    //     float2 knitUV     = uv * _KnitUVTiling;
-                    //     float  evenLoops  = ceil(_NumberOfLoops * 0.5) * 2.0;
-                    //     float2 scaledKnit = knitUV * evenLoops;
-
-                    //     float2 knitPixelSize = fwidth(scaledKnit);
-                    //     float  knitCoverage  = max(knitPixelSize.x, knitPixelSize.y);
-
-                    //     float adaptiveSoftness = _OpeningSoftness
-                    //     + saturate(knitCoverage * 0.25) * 0.12;
-
-                    //     float ign = InterleavedGradientNoise(IN.positionCS.xy);
-                    //     float2 uvJitter = (ign - 0.5) * knitPixelSize * 0.2;
-                    //     scaledKnit += uvJitter;
-
-                    //     float bumpFade   = 1.0 - smoothstep(_KnitFadeStart, _KnitFadeEnd, knitCoverage);
-                    //     float detailFade = 1.0 - smoothstep(
-                    //     _KnitFadeStart * 1.5,
-                    //     _KnitFadeEnd * 1.8,
-                    //     knitCoverage);
-                    //     float colorFade  = 1.0 - smoothstep(
-                    //     _KnitFadeStart * 2.5,
-                    //     _KnitFadeEnd * 2.5,
-                    //     knitCoverage);
-
-                    //     float transNoise = FabricNoiseValue(scaledKnit * 0.37) * 0.15;
-                    //     detailFade = saturate(detailFade + transNoise - 0.075);
-                    //     colorFade  = saturate(colorFade  + transNoise - 0.075);
-
-                    //     float openArea = PI * _OpeningSize * _OpeningSize * _LoopAspect;
-                    //     float cellArea = _LoopAspect;
-                    //     knitAvgThread = saturate(1.0 - openArea / cellArea);
-
-                    //     float3 dPdx_ws = ddx(IN.positionWS);
-                    //     float3 dPdy_ws = ddy(IN.positionWS);
-                    //     float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                    //     float2 dUVdx = ddx(uv);
-                    //     float2 dUVdy = ddy(uv);
-                    //     float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                    //     float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                    //     if (_UseStretchFromVertexG > 0)
-                    //     {
-                        //         stretchAmount = IN.vertexColor.g;
-                    //     }
-                    //     else
-                    //     {
-                        //         float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                        //         stretchAmount = saturate((stretchRatio - 1.0) * _StretchTransparency);
-                    //     }
-
-                    //     float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-
-                    //     float4 knit = EvaluateKnit(scaledKnit, stretchMod, adaptiveSoftness);
-                    //     float knitH = knit.x;
-                    //     knitThreadMask = knit.y;
-                    //     knitEdgeMask   = knit.z;
-
-                    //     knitThreadMask = lerp(knitAvgThread, knitThreadMask, detailFade);
-                    //     knitEdgeMask  *= detailFade;
-
-                    //     float dhdx = ddx(knitH);
-                    //     float dhdy = ddy(knitH);
-
-                    //     float maxDeriv = lerp(0.15, 0.5, bumpFade);
-                    //     dhdx = clamp(dhdx, -maxDeriv, maxDeriv);
-                    //     dhdy = clamp(dhdy, -maxDeriv, maxDeriv);
-
-                    //     normalTS.xy += float2(-dhdx, -dhdy)
-                    //     * _KnitNormalStrength
-                    //     * bumpFade;
-                    //     normalTS = normalize(normalTS);
-
-                    //     float threadProfile = saturate(1.0 - knitH * 2.5);
-                    //     float darkening = lerp(1.0 - _ThreadDarken, 1.0, threadProfile);
-                    //     albedo *= lerp(1.0, darkening, colorFade);
-
-                    //     roughness += _KnitRoughnessVar * (1.0 - knitThreadMask) * detailFade;
-                    //     roughness = clamp(roughness, 0.045, 1.0);
-                // }
                 // ══════════════════════════════════════════
                 //   PROCEDURAL KNIT INTEGRATION
                 // ══════════════════════════════════════════
-                float knitThreadMask = 1.0;
-                float knitEdgeMask   = 0.0;
-                float stretchAmount  = 0.0;
-                float knitAvgThread  = 1.0;
-
-                if (_UseProceduralKnit > 0)
-                {
-                    // ── Stretch computation ──────────────
-                    float3 dPdx_ws = ddx(IN.positionWS);
-                    float3 dPdy_ws = ddy(IN.positionWS);
-                    float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                    float2 dUVdx = ddx(uv);
-                    float2 dUVdy = ddy(uv);
-                    float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                    float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                    if (_UseStretchFromVertexG > 0)
-                    {
-                        stretchAmount = IN.vertexColor.g;
-                    }
-                    else
-                    {
-                        float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                        stretchAmount = saturate((stretchRatio - 1.0) * _StretchTransparency);
-                    }
-
-                    float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-                    float stretchedOpening = _OpeningSize * stretchMod;
-
-                    // ── Average thread coverage (moire fade target) ──
-                    float gapW = stretchedOpening * _GapWidthRatio;
-                    float gapH = stretchedOpening;
-                    knitAvgThread = saturate(1.0 - PI * gapW * gapH);
-
-                    // ── Evaluate the superelliptical knit SDF ──
-                    KnitResult knit = EvaluateKnitSDF(
-                    uv,
-                    _NumberOfLoops,
-                    _KnitUVTiling,
-                    _LoopAspect,
-                    stretchedOpening,
-                    _OpeningSoftness,
-                    _GapShapePower,
-                    _GapWidthRatio,
-                    _ThreadWidth,
-                    _KnitJitter,
-                    _KnitNormalStrength,
-                    IN.positionCS.xy
-                    );
-
-                    // ── Far-field fabric noise ────────────
-                    // When the SDF pattern fades (below Nyquist), replace it
-                    // with smooth noise-based variation that preserves fabric
-                    // character.  This is the procedural equivalent of what
-                    // texture mipmapping provides — the pattern blurs rather
-                    // than vanishing to flat plastic.
-                    float farField = 1.0 - knit.fade;   // 0 close, 1 far
-                    // Use multiple octaves at low frequency (safe from aliasing)
-                    float2 farUV   = uv * 20.0;
-                    float fnoise1  = FabricNoiseValue(farUV);
-                    float fnoise2  = FabricNoiseValue(farUV * 1.7 + 31.5);
-                    // Medium-frequency octave for more fabric texture
-                    float fnoise3  = FabricNoiseValue(farUV * 4.3 + 17.2);
-
-                    // ── Thread mask ──────────────────────
-                    // SDF detail at close range, noise-modulated average at distance.
-                    // Stronger noise variation (±15%) so fabric character is clear.
-                    float noiseVar = ((fnoise1 - 0.5) * 0.15
-                                    + (fnoise3 - 0.5) * 0.08) * farField;
-                    knitThreadMask = lerp(knitAvgThread + noiseVar,
-                                         knit.threadMask, knit.fade);
-                    knitThreadMask = saturate(knitThreadMask);
-
-                    // Edge mask: Gaussian peak at gap boundary for specular
-                    float edgeSigma = max(_OpeningSoftness * 0.7, 0.001);
-                    knitEdgeMask = exp(-pow(knit.threadDist / edgeSigma, 2.0))
-                                  * knit.fade;
-
-                    // ── Bump normal ──────────────────────
-                    // SDF bump (already faded internally) + far-field fabric bump
-                    normalTS.xy += knit.bumpNormal.xy;
-                    float farBump = 0.15 * _KnitNormalStrength * farField;
-                    normalTS.x += (fnoise1 - 0.5) * farBump;
-                    normalTS.y += (fnoise2 - 0.5) * farBump;
-                    normalTS.x += (fnoise3 - 0.5) * farBump * 0.5;
-
-                    // ── Yarn-loop micro-NDF: stochastic normal tilt ──────────
-                    // When cellsPerPx > 0 the resolved per-thread bump normal
-                    // starts fading (bumpFade). What should replace it is the
-                    // statistical distribution of yarn-loop surface normals —
-                    // which point in ALL tangent directions around the loop arc.
-                    // Model this as a per-pixel random tilt whose magnitude
-                    // grows with cellsPerPx: breaks the cylindrical macro-normal
-                    // pattern that causes the vertical GGX stripe.
-                    float yarnStochFade = smoothstep(0.05, 0.4, knit.cellsPerPx)
-                                          * _FabricMicroNDFStrength;
-                    float yarnAngle = InterleavedGradientNoise(IN.positionCS.xy + 17.3)
-                                      * 6.2831853;
-                    float yarnTilt  = yarnStochFade * knit.cellsPerPx * 0.3;
-                    normalTS.x += cos(yarnAngle) * yarnTilt;
-                    normalTS.y += sin(yarnAngle) * yarnTilt;
-                    normalTS = normalize(normalTS);
-
-                    // ── Thread darkening ─────────────────
-                    float darkening = (1.0 - knit.profile) * knit.threadMask
-                                      * _ThreadDarken;
-                    albedo *= 1.0 - darkening * knit.fade;
-                    // Far-field subtle color variation
-                    albedo *= 1.0 - (1.0 - fnoise1) * 0.04
-                              * _ThreadDarken * farField;
-
-                    // ── Roughness variation ──────────────
-                    float cellRand = KnitHash(knit.cellID);
-                    float rVar = (cellRand - 0.5) * 2.0 * _KnitRoughnessVar;
-
-                    // Fiber-scale noise (subtle high-freq variation per thread)
-                    float2 fiberUV = (frac(uv * _NumberOfLoops * _KnitUVTiling) - 0.5)
-                    * _KnitNoiseScale + knit.cellID * 1.7;
-                    float  fiberRnd = KnitHash(floor(fiberUV * 3.0));
-                    rVar += (fiberRnd - 0.5) * _KnitRoughnessVar * 0.5;
-
-                    roughness += rVar * knit.threadMask * knit.fade;
-                    // Far-field roughness variation (fabric shimmer at distance)
-                    roughness += (fnoise1 - 0.5) * _KnitRoughnessVar
-                                 * 0.3 * farField;
-                    roughness = clamp(roughness, 0.045, 1.0);
-
-                    // ── Yarn-loop effective roughness ────────────────────────
-                    // Hardware mip filtering widens the effective BRDF as a
-                    // texture pattern goes sub-pixel (it integrates the NDF).
-                    // We replicate that here: roughness grows with cellsPerPx
-                    // so the GGX lobe broadens proportionally when yarn loops
-                    // are smaller than a pixel.
-                    roughness = saturate(roughness + knit.cellsPerPx * 0.35
-                                         * _FabricMicroNDFStrength);
-                }
+                KnitSurfaceResult knitResult = EvaluateKnitSurface(
+                    uv, IN.positionWS, IN.positionCS, IN.vertexColor,
+                    normalTS, albedo, roughness);
+                float knitThreadMask = knitResult.knitThreadMask;
+                float knitEdgeMask   = knitResult.knitEdgeMask;
+                float stretchAmount  = knitResult.stretchAmount;
+                float knitAvgThread  = knitResult.knitAvgThread;
+                normalTS  = knitResult.normalTS;
+                albedo    = knitResult.albedo;
+                roughness = knitResult.roughness;
 
                 half3x3 tbnMatrix = half3x3(
                 IN.tangentWS.xyz,
