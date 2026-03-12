@@ -106,7 +106,7 @@ Material:
     - _FuzzIntensity: 0
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
-    - _GapOpacity: 0
+    - _GapOpacity: 1
     - _GapShapePower: 2.5
     - _GapWidthRatio: 1.5
     - _HeightScale: 0.02
@@ -114,9 +114,9 @@ Material:
     - _KnitFadeStart: 1
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 0.8
+    - _KnitNormalStrength: 2
     - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 16
+    - _KnitUVTiling: 12
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
@@ -133,9 +133,9 @@ Material:
     - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _StripSpecAnisotropy: 0.4
-    - _StripSpecIntensity: 0.15
-    - _StripSpecRoughness: 0.06
+    - _StripSpecAnisotropy: 0.95
+    - _StripSpecIntensity: 0.9
+    - _StripSpecRoughness: 0.2
     - _Subsurface: 0.1
     - _ThreadDarken: 0.8
     - _ThreadWidth: 0.5

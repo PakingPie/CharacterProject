@@ -537,12 +537,15 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 specular *= fabricSpecAtten;
 
-                // ── Strip specular (Ward anisotropic) ────
-                float stripSpec = WardAnisotropicSpecular(
+                // ── Strip specular (Ward BRDF + Fresnel) ────────
+                // Ward is a self-contained BRDF (normalization
+                // handles geometric spreading); only Fresnel is
+                // added for view-angle-dependent reflectance.
+                float  D_strip = WardAnisotropicSpecular(
                     h, stripTangentWS, stripBitangentWS, normalWS,
                     _StripSpecRoughness, _StripSpecAnisotropy);
-                float3 stripTerm = stripSpec * _StripSpecIntensity
-                                 * fabricSpecAtten;
+                float3 stripTerm = D_strip * F_direct
+                    * _StripSpecIntensity * fabricSpecAtten;
 
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
@@ -613,11 +616,11 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 tangentWS, F0, roughness, anisotropy);
                 aSpec *= fabricSpecAtten;
 
-                float aStripSpec = WardAnisotropicSpecular(
+                float  aD_strip = WardAnisotropicSpecular(
                     aH, stripTangentWS, stripBitangentWS, normalWS,
                     _StripSpecRoughness, _StripSpecAnisotropy);
-                float3 aStripTerm = aStripSpec * _StripSpecIntensity
-                                  * fabricSpecAtten;
+                float3 aStripTerm = aD_strip * aF
+                    * _StripSpecIntensity * fabricSpecAtten;
 
                 float3 aDiff = (1.0 - aF) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;

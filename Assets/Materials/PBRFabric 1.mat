@@ -57,7 +57,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 60faf8389da2c374783d783aeed88a34, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
@@ -99,11 +99,11 @@ Material:
     - _FresnelOpacityStrength: 0.5
     - _FuzzIntensity: 0
     - _FuzzPower: 3
-    - _HeightScale: 0.02
+    - _HeightScale: 0.1
     - _Metallic: 0
-    - _NormalStrength: 2
+    - _NormalStrength: 1
     - _Opacity: 1
-    - _Roughness: 0.1
+    - _Roughness: 0.3
     - _SeeThruTint: 0.9
     - _ShadowDensity: 1
     - _Sheen: 0
@@ -111,7 +111,10 @@ Material:
     - _SpecularTint: 0
     - _StretchOpeningGrow: 1.5
     - _StretchReference: 0.01
-    - _StretchTransparency: 0.5
+    - _StretchTransparency: 0.547
+    - _StripSpecAnisotropy: 0
+    - _StripSpecIntensity: 0.01
+    - _StripSpecRoughness: 0.2
     - _Subsurface: 0.1
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 4
@@ -136,6 +139,7 @@ Material:
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
+    - _StripSpecDirection: {r: 0, g: 1, b: 0, a: 0}
     - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
     - _TextureTiling: {r: 1, g: 2, b: 0, a: 0}
   m_BuildTextureStacks: []

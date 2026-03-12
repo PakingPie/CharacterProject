@@ -96,7 +96,7 @@ Material:
     - _FabricMicroNDFStrength: 1
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
-    - _FresnelOpacityPower: 1
+    - _FresnelOpacityPower: 3
     - _FresnelOpacityStrength: 1
     - _FuzzIntensity: 0
     - _FuzzPower: 3
@@ -108,30 +108,30 @@ Material:
     - _KnitCenterNormalWeakness: 0
     - _KnitFadeEnd: 0.7
     - _KnitFadeStart: 0.2
-    - _KnitJitter: 0.1
+    - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1
+    - _KnitNormalStrength: 0.5
     - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 16
+    - _KnitUVTiling: 20
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 40
     - _Opacity: 1
-    - _OpeningSize: 0.1
+    - _OpeningSize: 0.01
     - _OpeningSoftness: 0.2
     - _Roughness: 0.2
-    - _SeeThruTint: 0.85
+    - _SeeThruTint: 0.9
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.5
     - _SpecularTint: 1
-    - _StretchOpeningGrow: 0.1
+    - _StretchOpeningGrow: 1.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _StripSpecAnisotropy: 0
-    - _StripSpecIntensity: 0.1
-    - _StripSpecRoughness: 0.25
+    - _StripSpecAnisotropy: 0.95
+    - _StripSpecIntensity: 1
+    - _StripSpecRoughness: 0.3
     - _Subsurface: 0.1
     - _ThreadDarken: 1
     - _ThreadWidth: 1
