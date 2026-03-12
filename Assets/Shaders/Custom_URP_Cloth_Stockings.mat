@@ -39,23 +39,23 @@ Material:
     m_Ints: []
     m_Floats:
     - _Anisotropic: 1
-    - _AnisotropicIntensity: 0.8
-    - _AnisotropicRoughness: 0.2
-    - _BumpScale: 2
+    - _AnisotropicIntensity: 0.7
+    - _AnisotropicRoughness: 0.663
+    - _BumpScale: 1
     - _Cull: 2
     - _DstBlend: 10
     - _FabricDetailStrength: 0
     - _FabricTiling: 1
-    - _Metallic: 1
+    - _Metallic: 0
     - _RimIntensity: 0.8
     - _RimPower: 2
     - _SSSDistortion: 0.3
-    - _SSSIntensity: 0
+    - _SSSIntensity: 0.215
     - _SSSPower: 2
     - _SSSScale: 2
     - _SheenIntensity: 0.6
     - _SheenRoughness: 0.25
-    - _Smoothness: 0.173
+    - _Smoothness: 0.338
     - _SrcBlend: 5
     - _Transparency: 0.035
     - _ZWrite: 0

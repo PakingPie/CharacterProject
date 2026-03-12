@@ -100,6 +100,25 @@ float3 FresnelSchlick(float cosTheta, float3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// ── Ward Anisotropic Specular (strip highlight) ─────
+float WardAnisotropicSpecular(float3 H, float3 T, float3 B, float3 N,
+                              float roughness, float anisotropy)
+{
+    float TdotH = dot(T, H);
+    float BdotH = dot(B, H);
+    float NdotH = dot(N, H);
+
+    float roughnessT = roughness * (1.0 + anisotropy);
+    float roughnessB = roughness * (1.0 - anisotropy);
+
+    float normalization = rcp(PI * roughnessT * roughnessB);
+    float exponent = -(TdotH * TdotH / (roughnessT * roughnessT)
+                     + BdotH * BdotH / (roughnessB * roughnessB))
+                     / (NdotH * NdotH + 0.0001);
+
+    return normalization * exp(exponent);
+}
+
 // ── Anisotropic GGX NDF ─────────────────────
 float DistributionGGXAnisotropic(float3 N, float3 T, float3 H,
                                  float roughness, float anisotropy)

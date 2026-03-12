@@ -79,6 +79,25 @@ float3 FresnelSchlick(float cosTheta, float3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// ── Ward Anisotropic Specular (strip highlight) ─────
+float WardAnisotropicSpecular(float3 H, float3 T, float3 B, float3 N,
+                              float roughness, float anisotropy)
+{
+    float TdotH = dot(T, H);
+    float BdotH = dot(B, H);
+    float NdotH = dot(N, H);
+
+    float roughnessT = roughness * (1.0 + anisotropy);
+    float roughnessB = roughness * (1.0 - anisotropy);
+
+    float normalization = rcp(PI * roughnessT * roughnessB);
+    float exponent = -(TdotH * TdotH / (roughnessT * roughnessT)
+                     + BdotH * BdotH / (roughnessB * roughnessB))
+                     / (NdotH * NdotH + 0.0001);
+
+    return normalization * exp(exponent);
+}
+
 // ── Anisotropic GGX NDF ─────────────────────
 float DistributionGGXAnisotropic(float3 N, float3 T, float3 H,
                                  float roughness, float anisotropy)
@@ -320,22 +339,22 @@ KnitResult EvaluateKnitSDF(
     o.cellsPerPx = cellsPerPx;
 
     // SDF detail fade:
-    //   < 0.3 cells/px  →  fully resolved, show SDF
-    //   > 1.0 cells/px  →  fully below Nyquist → far-field
-    o.fade = 1.0 - smoothstep(0.3, 1.0, cellsPerPx);
+    //   < 0.25 cells/px →  fully resolved, show SDF
+    //   > 0.55 cells/px →  past Nyquist → far-field only
+    o.fade = 1.0 - smoothstep(0.25, 0.55, cellsPerPx);
 
     // Bump fades faster — specular shimmer is far more
     // perceptible than colour-level moiré.
-    float bumpFade = 1.0 - smoothstep(0.2, 0.7, cellsPerPx);
+    float bumpFade = 1.0 - smoothstep(0.15, 0.45, cellsPerPx);
 
     // -------------------------------------------------------
     // 3.  STOCHASTIC JITTER  (transition-zone noise)
     // -------------------------------------------------------
     // Per-pixel noise offset in grid space breaks the coherent
-    // periodic sampling that causes moiré.  Starts early and
-    // scales aggressively with pixel footprint.
-    float ign = InterleavedGradientNoise(screenPos);
-    float stochActivation = smoothstep(0.15, 0.6, cellsPerPx);
+    // periodic sampling that causes moiré.  Uses a grid-anchored
+    // hash so the jitter sticks to the fabric (no screen crawl).
+    float ign = KnitHash(floor(gridUV) + 53.7);
+    float stochActivation = smoothstep(0.15, 0.5, cellsPerPx);
     gridUV += (ign - 0.5) * stochActivation * cellsPerPx * 0.5;
 
     // Brick offset on odd rows (half-cell shift)

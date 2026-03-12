@@ -88,6 +88,11 @@ CBUFFER_START(UnityPerMaterial)
     float  _FresnelOpacityStrength;
     float  _SeeThruTint;
 
+    float4 _StripSpecDirection;
+    float  _StripSpecIntensity;
+    float  _StripSpecRoughness;
+    float  _StripSpecAnisotropy;
+
     float  _UseReflectiveProbe;
     float  _UseCustomCubemap;
 

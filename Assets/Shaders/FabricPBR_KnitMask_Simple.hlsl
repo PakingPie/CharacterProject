@@ -42,10 +42,10 @@ float EvaluateSimpleKnitMask(float2 uv, float stretchAmount, float2 screenPos)
     float2 gy = ddy(gridUV);
     float cellsPerPx = max(length(float2(gx.x, gy.x)),
                            length(float2(gx.y, gy.y)));
-    float fade = 1.0 - smoothstep(0.3, 1.0, cellsPerPx);
+    float fade = 1.0 - smoothstep(0.25, 0.55, cellsPerPx);
 
-    float ign = frac(52.9829189 * frac(dot(screenPos, float2(0.06711056, 0.00583715))));
-    float stochActivation = smoothstep(0.15, 0.6, cellsPerPx);
+    float ign = SimpleKnitHash(floor(gridUV) + 53.7);
+    float stochActivation = smoothstep(0.15, 0.5, cellsPerPx);
     gridUV += (ign - 0.5) * stochActivation * cellsPerPx * 0.5;
 
     float rowIdx = floor(gridUV.y);

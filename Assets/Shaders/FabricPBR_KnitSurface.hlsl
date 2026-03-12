@@ -139,10 +139,11 @@ KnitSurfaceResult EvaluateKnitSurface(
     // Model this as a per-pixel random tilt whose magnitude
     // grows with cellsPerPx: breaks the cylindrical macro-normal
     // pattern that causes the vertical GGX stripe.
+    // Use cellID-based hash so the tilt sticks to each stitch
+    // (no screen-space crawl).
     float yarnStochFade = smoothstep(0.05, 0.4, knit.cellsPerPx)
                           * _FabricMicroNDFStrength;
-    float yarnAngle = InterleavedGradientNoise(positionCS.xy + 17.3)
-                      * 6.2831853;
+    float yarnAngle = KnitHash(knit.cellID + 17.3) * 6.2831853;
     float yarnTilt  = yarnStochFade * knit.cellsPerPx * 0.3;
     r.normalTS.x += cos(yarnAngle) * yarnTilt;
     r.normalTS.y += sin(yarnAngle) * yarnTilt;

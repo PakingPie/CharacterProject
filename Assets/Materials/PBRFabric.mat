@@ -30,8 +30,10 @@ Material:
   - Use Reflective Probe
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
+  - _USEANTIMOIRE_ON
   - _USEDENIERFROMVERTEXR_ON
   - _USEPROCEDURALKNIT_ON
+  - _USESTRETCHFROMVERTEXG_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -87,7 +89,7 @@ Material:
     - _ClearCoat: 0.2
     - _ClearCoatRoughness: 0.2
     - _DenierMax: 1
-    - _DenierMin: 0.05
+    - _DenierMin: 0.1
     - _DiffuseWrap: 0.11
     - _EnableEmission: 0
     - _F0: 0.04
@@ -106,30 +108,33 @@ Material:
     - _KnitCenterNormalWeakness: 0
     - _KnitFadeEnd: 0.7
     - _KnitFadeStart: 0.2
-    - _KnitJitter: 0.15
+    - _KnitJitter: 0.1
     - _KnitNoiseScale: 10
     - _KnitNormalStrength: 1
-    - _KnitRoughnessVar: 0
-    - _KnitUVTiling: 20
+    - _KnitRoughnessVar: 0.3
+    - _KnitUVTiling: 16
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 40
     - _Opacity: 1
     - _OpeningSize: 0.1
-    - _OpeningSoftness: 0.3
-    - _Roughness: 0.1
-    - _SeeThruTint: 0.95
-    - _ShadowDensity: 0.5
+    - _OpeningSoftness: 0.2
+    - _Roughness: 0.2
+    - _SeeThruTint: 0.85
+    - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.5
     - _SpecularTint: 1
-    - _StretchOpeningGrow: 2
+    - _StretchOpeningGrow: 0.1
     - _StretchReference: 0.01
     - _StretchTransparency: 1
+    - _StripSpecAnisotropy: 0
+    - _StripSpecIntensity: 0.1
+    - _StripSpecRoughness: 0.25
     - _Subsurface: 0.1
     - _ThreadDarken: 1
-    - _ThreadWidth: 0.3
+    - _ThreadWidth: 1
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
@@ -138,7 +143,7 @@ Material:
     - _UseAOMap: 0
     - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
-    - _UseAntiMoire: 0
+    - _UseAntiMoire: 1
     - _UseCustomCubemap: 1
     - _UseDenierFromVertexR: 1
     - _UseHeightMap: 0
@@ -148,7 +153,7 @@ Material:
     - _UseProceduralKnit: 1
     - _UseReflectiveProbe: 1
     - _UseRoughnessMap: 0
-    - _UseStretchFromVertexG: 0
+    - _UseStretchFromVertexG: 1
     - _UseVertexAlpha: 0
     m_Colors:
     - _BaseColor: {r: 0.15471691, g: 0.13866138, b: 0.13866138, a: 1}
@@ -156,6 +161,7 @@ Material:
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 0.5924529, g: 0.5924529, b: 0.5924529, a: 1}
+    - _StripSpecDirection: {r: 0, g: 1, b: 0, a: 0}
     - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
     - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []

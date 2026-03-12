@@ -89,6 +89,12 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _DenierMin("Sheer Area Opacity  (R=0, thigh/calf)", Range(0, 1)) = 0.0
         [HideInInspector] _DenierMax("Dense Area Opacity  (R=1, ankle/knee)", Range(0, 1)) = 1.0
 
+        [Header(Strip Specular)]
+        _StripSpecDirection("Fiber Direction (tangent space)", Vector) = (0, 1, 0, 0)
+        _StripSpecIntensity("Strip Intensity", Range(0, 1)) = 0.3
+        _StripSpecRoughness("Strip Roughness", Range(0.01, 1)) = 0.5
+        _StripSpecAnisotropy("Strip Anisotropy", Range(0, 1)) = 0.4
+
         [Header(Clearcoat)]
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
         _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
@@ -341,6 +347,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 float nov = max(dot(normalWS, viewDirWS), 0.0001);
 
+                // ── Strip-specular tangent frame ─────────
+                float3 bitangentWS_strip = cross(normalWS, tangentWS);
+                float3 stripTangentWS = normalize(
+                    tangentWS * _StripSpecDirection.x
+                  + bitangentWS_strip * _StripSpecDirection.y
+                  + normalWS * _StripSpecDirection.z);
+                float3 stripBitangentWS = normalize(cross(normalWS, stripTangentWS));
+
                 // ══════════════════════════════════════════
                 // Opacity pipeline
                 // ══════════════════════════════════════════
@@ -523,6 +537,13 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 specular *= fabricSpecAtten;
 
+                // ── Strip specular (Ward anisotropic) ────
+                float stripSpec = WardAnisotropicSpecular(
+                    h, stripTangentWS, stripBitangentWS, normalWS,
+                    _StripSpecRoughness, _StripSpecAnisotropy);
+                float3 stripTerm = stripSpec * _StripSpecIntensity
+                                 * fabricSpecAtten;
+
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
 
@@ -538,7 +559,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
 
                 float3 mainBodyLighting = diffuse * nolWrap * mainRadiance;
-                float3 mainReflectLighting = (specular + sheen + clearcoat) * nol * mainRadiance;
+                float3 mainReflectLighting = (specular + sheen + clearcoat + stripTerm) * nol * mainRadiance;
 
                 if (_UseProceduralKnit > 0 && _GapEdgeHighlight > 0)
                 {
@@ -592,6 +613,12 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 tangentWS, F0, roughness, anisotropy);
                 aSpec *= fabricSpecAtten;
 
+                float aStripSpec = WardAnisotropicSpecular(
+                    aH, stripTangentWS, stripBitangentWS, normalWS,
+                    _StripSpecRoughness, _StripSpecAnisotropy);
+                float3 aStripTerm = aStripSpec * _StripSpecIntensity
+                                  * fabricSpecAtten;
+
                 float3 aDiff = (1.0 - aF) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
 
@@ -609,7 +636,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 * light.shadowAttenuation;
 
                 addBodyLighting += aDiff * aNoLWrap * lightRad;
-                addReflectLighting += (aSpec + aSheen + aCC) * aNoL * lightRad;
+                addReflectLighting += (aSpec + aSheen + aCC + aStripTerm) * aNoL * lightRad;
 
                 if (_UseProceduralKnit > 0 && _GapEdgeHighlight > 0)
                 {

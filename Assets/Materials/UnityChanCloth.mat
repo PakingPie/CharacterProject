@@ -33,6 +33,7 @@ Material:
   - _ANISOTROPIC
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
+  - _USEANTIMOIRE_ON
   - _USEDENIERFROMVERTEXR_ON
   - _USEPROCEDURALKNIT_ON
   - _USESTRETCHFROMVERTEXG_ON
@@ -105,7 +106,7 @@ Material:
     - _FuzzIntensity: 0
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
-    - _GapOpacity: 1
+    - _GapOpacity: 0
     - _GapShapePower: 2.5
     - _GapWidthRatio: 1.5
     - _HeightScale: 0.02
@@ -113,18 +114,18 @@ Material:
     - _KnitFadeStart: 1
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1
-    - _KnitRoughnessVar: 0
+    - _KnitNormalStrength: 0.8
+    - _KnitRoughnessVar: 0.3
     - _KnitUVTiling: 16
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.02
-    - _OpeningSoftness: 0.2
+    - _OpeningSize: 0.25
+    - _OpeningSoftness: 0.1
     - _Roughness: 0.3
-    - _SeeThruTint: 0.85
+    - _SeeThruTint: 0.95
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
@@ -132,9 +133,12 @@ Material:
     - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
+    - _StripSpecAnisotropy: 0.4
+    - _StripSpecIntensity: 0.15
+    - _StripSpecRoughness: 0.06
     - _Subsurface: 0.1
     - _ThreadDarken: 0.8
-    - _ThreadWidth: 0.4
+    - _ThreadWidth: 0.5
     - _TransmissionDistortion: 0.725
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
@@ -143,6 +147,7 @@ Material:
     - _UseAOMap: 0
     - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
+    - _UseAntiMoire: 1
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 1
     - _UseHeightMap: 0
@@ -162,6 +167,7 @@ Material:
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 0.9, b: 0.85, a: 1}
+    - _StripSpecDirection: {r: 0, g: 1, b: 0, a: 0}
     - _SubsurfaceColor: {r: 1, g: 0.72, b: 0.58, a: 1}
     - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
