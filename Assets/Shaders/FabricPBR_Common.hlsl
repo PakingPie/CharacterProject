@@ -48,6 +48,7 @@ CBUFFER_START(UnityPerMaterial)
     float  _FabricMicroNDFStrength;
 
     float  _UseProceduralKnit;
+    float  _UseAntiMoire;
     float  _KnitUVTiling;
     float  _NumberOfLoops;
     float  _LoopAspect;

@@ -51,6 +51,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
         [Header(Procedural Knit)]
         [Toggle] _UseProceduralKnit("Enable Procedural Knit", Float) = 0
+        [Toggle] _UseAntiMoire("Enable Anti-Moire", Float) = 1
         _KnitUVTiling("UV Tiling Multiplier", Float) = 1.0
         _NumberOfLoops("Loop Count (per UV)", Float) = 40
         _LoopAspect("Loop Height over Width", Range(0.5, 2.5)) = 1.3

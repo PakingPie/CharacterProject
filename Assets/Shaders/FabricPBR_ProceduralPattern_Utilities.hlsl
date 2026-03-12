@@ -313,6 +313,10 @@ KnitResult EvaluateKnitSDF(
     float2 gy = ddy(gridUV);
     float cellsPerPx = max(length(float2(gx.x, gy.x)),
                            length(float2(gx.y, gy.y)));
+    // Toggle: when anti-moiré is off, zero out cellsPerPx so all
+    // distance-dependent effects (fade, bumpFade, jitter, yarn tilt,
+    // roughness broadening) naturally evaluate to their near-field values.
+    cellsPerPx = _UseAntiMoire > 0 ? cellsPerPx : 0;
     o.cellsPerPx = cellsPerPx;
 
     // SDF detail fade:
