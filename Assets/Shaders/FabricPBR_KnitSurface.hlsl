@@ -23,6 +23,7 @@ struct KnitSurfaceResult
     half3  normalTS;        // Tangent-space normal after knit bump
     float3 albedo;          // Albedo after thread darkening
     float  roughness;       // Roughness after knit variation
+    float2 threadDir;       // Thread tangent direction (blended to (1,0) at distance)
 };
 
 KnitSurfaceResult EvaluateKnitSurface(
@@ -42,6 +43,7 @@ KnitSurfaceResult EvaluateKnitSurface(
     r.normalTS       = normalTS;
     r.albedo         = albedo;
     r.roughness      = roughness;
+    r.threadDir      = float2(1, 0);
 
     if (_UseProceduralKnit <= 0)
         return r;
@@ -89,6 +91,9 @@ KnitSurfaceResult EvaluateKnitSurface(
         _KnitNormalStrength,
         positionCS.xy
     );
+
+    // ── Thread direction (blended to default at distance) ──
+    r.threadDir = lerp(float2(1, 0), knit.threadDir, knit.fade);
 
     // ── Far-field fabric noise ────────────
     // When the SDF pattern fades (below Nyquist), replace it

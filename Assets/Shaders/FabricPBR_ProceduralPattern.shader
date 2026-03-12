@@ -15,7 +15,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _AmbientOcclusion("Ambient Occlusion", Range(0,1)) = 1.0
 
         [Header(Anisotropy)]
-        _Anisotropy("Anisotropy", Range(0,1)) = 0.5
+        _Anisotropy("Anisotropy", Range(-1,1)) = 0.5
 
         [Header(Specular)]
         _SpecularColor("Specular Color", Color) = (1,1,1,1)
@@ -64,7 +64,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _KnitJitter("Opening Position Jitter", Range(0, 0.15)) = 0.02
         _KnitNoiseScale("Fiber Noise Scale", Float) = 10
 
-        _GapEdgeHighlight("Gap Edge Specular Boost", Range(0, 3)) = 0.8
+        _GapEdgeHighlight("Gap Edge Specular Boost", Range(0, 1)) = 0.8
 
         _GapShapePower ("Gap Shape (1=Diamond  2=Ellipse)", Range(1.0, 2.5)) = 1.5
         _GapWidthRatio ("Gap Width / Height Ratio", Range(0.5, 3.0)) = 1.5
@@ -89,7 +89,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         [HideInInspector] _DenierMax("Dense Area Opacity  (R=1, ankle/knee)", Range(0, 1)) = 1.0
 
         [Header(Clearcoat)]
-        _ClearCoat("Clear Coat", Range(0,10)) = 0.0
+        _ClearCoat("Clear Coat", Range(0,1)) = 0.0
         _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
 
         [Header(Transparency)]
@@ -325,6 +325,19 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 tangentWS = normalize(IN.tangentWS.xyz
                 - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
+                // ── Thread-direction tangent rotation ────
+                if (_UseProceduralKnit > 0)
+                {
+                    float2 td = knitResult.threadDir;
+                    float tdLen = length(td);
+                    if (tdLen > 0.001)
+                    {
+                        td /= tdLen;
+                        float3 bitangentWS_ortho = cross(normalWS, tangentWS);
+                        tangentWS = normalize(tangentWS * td.x + bitangentWS_ortho * td.y);
+                    }
+                }
+
                 float nov = max(dot(normalWS, viewDirWS), 0.0001);
 
                 // ══════════════════════════════════════════
@@ -366,7 +379,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 {
                     float edgeOpacity = pow(1.0 - nov, _FresnelOpacityPower)
                     * _FresnelOpacityStrength;
-                    opacity = saturate(opacity + edgeOpacity);
+                    opacity = 1.0 - (1.0 - opacity) * (1.0 - edgeOpacity);
+                    opacity = saturate(opacity);
                 }
 
                 float twoLayerGrazing = 0.0;
@@ -408,8 +422,21 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 * _SpecularColor.rgb;
                 float3 F0 = lerp(float3(_F0, _F0, _F0) * specTint, albedo, metallic);
 
+                float sheenAlbedo = SheenDirectionalAlbedo(_Sheen, _SheenRoughness);
+
                 float3 kS = FresnelSchlickRoughness(nov, F0, roughness);
-                float3 kD = (1.0 - kS) * (1.0 - metallic);
+                float3 kD = (1.0 - kS) * (1.0 - metallic) * (1.0 - sheenAlbedo);
+
+                // ── Fabric specular attenuation ──────────────
+                float fabricSpecAtten = 1.0;
+                float fabricCCAtten   = 1.0;
+                if (_UseProceduralKnit > 0)
+                {
+                    float threadSpecAtten = lerp(0.15, 1.0, _FabricSpecAttenuation);
+                    float threadCCAtten   = lerp(0.25, 1.0, _FabricSpecAttenuation);
+                    fabricSpecAtten = lerp(1.0, threadSpecAtten, knitThreadMask);
+                    fabricCCAtten   = lerp(1.0, threadCCAtten, knitThreadMask);
+                }
 
                 InputData inputData = (InputData)0;
                 inputData.positionWS              = IN.positionWS;
@@ -449,14 +476,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 bakedIrradiance);
 
                 float3 indirectBodyLighting = ibl.diffuse;
-                float3 indirectReflectLighting = ibl.specular * indirectAO;
+                float3 indirectReflectLighting = ibl.specular * indirectAO * fabricSpecAtten;
 
                 if (_FuzzIntensity > 0)
                 {
                     float fuzzFresnel = pow(1.0 - nov, _FuzzPower);
                     float3 fuzz = _FuzzColor.rgb * _FuzzIntensity * fuzzFresnel;
                     float3 ambientLevel = max(bakedIrradiance, 0.05);
-                    indirectReflectLighting += fuzz * ambientLevel * indirectAO;
+                    indirectBodyLighting += fuzz * ambientLevel * indirectAO;
                 }
 
                 if (_Subsurface > 0 && _AmbientTransmission > 0)
@@ -471,13 +498,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 emission = _EnableEmission > 0
                 ? _EmissionColor.rgb : (float3)0;
 
-                float sheenAlbedo = SheenDirectionalAlbedo(_Sheen, _SheenRoughness);
-
                 // ══════════════════════════════════════════
                 //  MAIN LIGHT
                 // ══════════════════════════════════════════
-                float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
-                Light  mainLight   = GetMainLight(shadowCoord);
+                Light  mainLight   = GetMainLight(inputData.shadowCoord);
 
                 float  rawNdotL = dot(normalWS, mainLight.direction);
                 float  nol      = saturate(rawNdotL);
@@ -496,25 +520,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 specular = (D_direct * G_direct * F_direct)
                 / max(4.0 * nov * nol, 0.001);
 
-                // ── Fabric specular attenuation ──────────
-                // Real fabric fibers scatter light broadly — sharp GGX
-                // highlights from Cook-Torrance are wrong for textiles.
-                // Attenuate the GGX lobe and clearcoat when using the
-                // procedural knit, letting the sheen (Charlie/cloth BRDF)
-                // be the dominant specular.
-                float fabricSpecAtten = 1.0;
-                float fabricCCAtten   = 1.0;
-                if (_UseProceduralKnit > 0)
-                {
-                    float threadSpecAtten = lerp(0.15, 1.0, _FabricSpecAttenuation);
-                    float threadCCAtten   = lerp(0.25, 1.0, _FabricSpecAttenuation);
-                    // Thread mask controls attenuation: gaps show skin
-                    // behind (specular from skin is fine), thread areas
-                    // scatter light softly.  For nylon-like stockings,
-                    // attenuation should stay much closer to standard dielectric.
-                    fabricSpecAtten = lerp(1.0, threadSpecAtten, knitThreadMask);
-                    fabricCCAtten   = lerp(1.0, threadCCAtten, knitThreadMask);
-                }
                 specular *= fabricSpecAtten;
 
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
@@ -544,7 +549,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 mainBodyLighting += EvaluateTransmission(
                 normalWS, viewDirWS, mainLight.direction,
-                mainLight.color,
+                mainLight.color * mainLight.shadowAttenuation,
                 _Subsurface, _SubsurfaceColor.rgb,
                 _TransmissionDistortion, _TransmissionPower);
 
@@ -614,7 +619,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 addBodyLighting += EvaluateTransmission(
                 normalWS, viewDirWS, light.direction,
-                light.color * light.distanceAttenuation,
+                light.color * light.distanceAttenuation * light.shadowAttenuation,
                 _Subsurface, _SubsurfaceColor.rgb,
                 _TransmissionDistortion, _TransmissionPower);
                 LIGHT_LOOP_END
@@ -675,6 +680,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
             #include "FabricPBR_Common.hlsl"    // ★ SAME CBUFFER
+            #include "FabricPBR_KnitMask_Simple.hlsl"
 
             float3 _LightDirection;
 
@@ -728,87 +734,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 return OUT;
             }
 
-            float ShadowKnitHash(float2 p)
-            {
-                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
-            }
-
-            float ComputeShadowStretchAmount(Varyings IN)
-            {
-                if (_UseStretchFromVertexG > 0)
-                return saturate(IN.vertexColor.g);
-
-                float3 dPdx_ws = ddx(IN.positionWS);
-                float3 dPdy_ws = ddy(IN.positionWS);
-                float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                float2 dUVdx = ddx(IN.uv);
-                float2 dUVdy = ddy(IN.uv);
-                float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                return saturate((stretchRatio - 1.0) * _StretchTransparency);
-            }
-
-            float EvaluateShadowKnitMask(float2 uv, float stretchAmount, float2 screenPos)
-            {
-                float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-                float stretchedOpening = _OpeningSize * stretchMod;
-
-                float loopsAcross = max(_NumberOfLoops * _KnitUVTiling, 1e-4);
-                float2 gridScale = float2(loopsAcross, loopsAcross / max(_LoopAspect, 0.001));
-                float2 gridUV = uv * gridScale;
-
-                float2 gx = ddx(gridUV);
-                float2 gy = ddy(gridUV);
-                float cellsPerPx = max(length(float2(gx.x, gy.x)),
-                                       length(float2(gx.y, gy.y)));
-                float fade = 1.0 - smoothstep(0.3, 1.0, cellsPerPx);
-
-                float ign = frac(52.9829189 * frac(dot(screenPos, float2(0.06711056, 0.00583715))));
-                float stochActivation = smoothstep(0.15, 0.6, cellsPerPx);
-                gridUV += (ign - 0.5) * stochActivation * cellsPerPx * 0.5;
-
-                float rowIdx = floor(gridUV.y);
-                gridUV.x += fmod(abs(rowIdx), 2.0) * 0.5;
-
-                float2 cellID = floor(gridUV);
-                float2 local = frac(gridUV) - 0.5;
-                float2 jitter = (float2(
-                    ShadowKnitHash(cellID),
-                    ShadowKnitHash(cellID + 127.231)) - 0.5) * 2.0 * _KnitJitter;
-                local -= jitter;
-
-                float gapH = max(stretchedOpening, 0.001);
-                float gapW = max(stretchedOpening * _GapWidthRatio, 0.001);
-                float n = _GapShapePower;
-
-                float px = abs(local.x) / gapW;
-                float py = abs(local.y) / gapH;
-                float se = pow(pow(px, n) + pow(py, n), 1.0 / n);
-                float minR = min(gapW, gapH);
-                float gapDist = (1.0 - se) * minR;
-
-                float softCell = cellsPerPx * 0.45;
-                float softFwidth = fwidth(gapDist) * 0.5;
-                float adaptiveSoft = max(
-                    _OpeningSoftness,
-                    lerp(softCell, max(softFwidth, cellsPerPx * 0.05), _UseAnalyticSoftness));
-
-                float threadMask = 1.0 - smoothstep(-adaptiveSoft, adaptiveSoft, gapDist);
-                float avgThreadCoverage = saturate(1.0 - PI * gapW * gapH);
-                return saturate(lerp(avgThreadCoverage, threadMask, fade));
-            }
-
             half4 ShadowFrag(Varyings IN) : SV_TARGET
             {
                 float opacity;
 
                 if (_UseProceduralKnit > 0)
                 {
-                    float stretchAmount = ComputeShadowStretchAmount(IN);
-                    float threadMask = EvaluateShadowKnitMask(IN.uv, stretchAmount, IN.positionCS.xy);
+                    float stretchAmount = ComputeSimpleStretchAmount(IN.uv, IN.positionWS, IN.vertexColor);
+                    float threadMask = EvaluateSimpleKnitMask(IN.uv, stretchAmount, IN.positionCS.xy);
                     opacity = _Opacity * _BaseColor.a;
                     opacity *= lerp(_GapOpacity, 1.0, threadMask);
                 }
@@ -855,6 +788,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "FabricPBR_Common.hlsl"    // ★ SAME CBUFFER
+            #include "FabricPBR_KnitMask_Simple.hlsl"
 
             TEXTURE2D(_OpacityMap); SAMPLER(sampler_OpacityMap);
             TEXTURE2D(_MainTex);    SAMPLER(sampler_MainTex);
@@ -892,87 +826,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 return OUT;
             }
 
-            float DepthKnitHash(float2 p)
-            {
-                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
-            }
-
-            float ComputeDepthStretchAmount(Varyings IN)
-            {
-                if (_UseStretchFromVertexG > 0)
-                return saturate(IN.vertexColor.g);
-
-                float3 dPdx_ws = ddx(IN.positionWS);
-                float3 dPdy_ws = ddy(IN.positionWS);
-                float  worldPixArea = length(cross(dPdx_ws, dPdy_ws));
-
-                float2 dUVdx = ddx(IN.uv);
-                float2 dUVdy = ddy(IN.uv);
-                float  uvPixArea = abs(dUVdx.x * dUVdy.y - dUVdx.y * dUVdy.x);
-                float  worldPerUV = sqrt(worldPixArea / max(uvPixArea, 1e-10));
-
-                float stretchRatio = worldPerUV / max(_StretchReference, 1e-6);
-                return saturate((stretchRatio - 1.0) * _StretchTransparency);
-            }
-
-            float EvaluateDepthKnitMask(float2 uv, float stretchAmount, float2 screenPos)
-            {
-                float stretchMod = lerp(1.0, 1.0 + _StretchOpeningGrow, stretchAmount);
-                float stretchedOpening = _OpeningSize * stretchMod;
-
-                float loopsAcross = max(_NumberOfLoops * _KnitUVTiling, 1e-4);
-                float2 gridScale = float2(loopsAcross, loopsAcross / max(_LoopAspect, 0.001));
-                float2 gridUV = uv * gridScale;
-
-                float2 gx = ddx(gridUV);
-                float2 gy = ddy(gridUV);
-                float cellsPerPx = max(length(float2(gx.x, gy.x)),
-                                       length(float2(gx.y, gy.y)));
-                float fade = 1.0 - smoothstep(0.3, 1.0, cellsPerPx);
-
-                float ign = frac(52.9829189 * frac(dot(screenPos, float2(0.06711056, 0.00583715))));
-                float stochActivation = smoothstep(0.15, 0.6, cellsPerPx);
-                gridUV += (ign - 0.5) * stochActivation * cellsPerPx * 0.5;
-
-                float rowIdx = floor(gridUV.y);
-                gridUV.x += fmod(abs(rowIdx), 2.0) * 0.5;
-
-                float2 cellID = floor(gridUV);
-                float2 local = frac(gridUV) - 0.5;
-                float2 jitter = (float2(
-                    DepthKnitHash(cellID),
-                    DepthKnitHash(cellID + 127.231)) - 0.5) * 2.0 * _KnitJitter;
-                local -= jitter;
-
-                float gapH = max(stretchedOpening, 0.001);
-                float gapW = max(stretchedOpening * _GapWidthRatio, 0.001);
-                float n = _GapShapePower;
-
-                float px = abs(local.x) / gapW;
-                float py = abs(local.y) / gapH;
-                float se = pow(pow(px, n) + pow(py, n), 1.0 / n);
-                float minR = min(gapW, gapH);
-                float gapDist = (1.0 - se) * minR;
-
-                float softCell = cellsPerPx * 0.45;
-                float softFwidth = fwidth(gapDist) * 0.5;
-                float adaptiveSoft = max(
-                    _OpeningSoftness,
-                    lerp(softCell, max(softFwidth, cellsPerPx * 0.05), _UseAnalyticSoftness));
-
-                float threadMask = 1.0 - smoothstep(-adaptiveSoft, adaptiveSoft, gapDist);
-                float avgThreadCoverage = saturate(1.0 - PI * gapW * gapH);
-                return saturate(lerp(avgThreadCoverage, threadMask, fade));
-            }
-
             half DepthFrag(Varyings IN) : SV_TARGET
             {
                 float opacity;
 
                 if (_UseProceduralKnit > 0)
                 {
-                    float stretchAmount = ComputeDepthStretchAmount(IN);
-                    float threadMask = EvaluateDepthKnitMask(IN.uv, stretchAmount, IN.positionCS.xy);
+                    float stretchAmount = ComputeSimpleStretchAmount(IN.uv, IN.positionWS, IN.vertexColor);
+                    float threadMask = EvaluateSimpleKnitMask(IN.uv, stretchAmount, IN.positionCS.xy);
                     opacity = _Opacity * _BaseColor.a;
                     opacity *= lerp(_GapOpacity, 1.0, threadMask);
                 }

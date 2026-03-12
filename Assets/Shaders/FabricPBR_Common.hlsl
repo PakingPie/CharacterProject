@@ -98,19 +98,6 @@ CBUFFER_START(UnityPerMaterial)
     float  _UseHeightMap;
 CBUFFER_END
 
-// Shared dither function
-float DitherThreshold4x4(float2 screenPos)
-{
-    const float4x4 bayer = float4x4(
-         0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
-        12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
-         3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
-        15.0/16.0,  7.0/16.0, 13.0/16.0,  5.0/16.0
-    );
-    uint2 idx = uint2(screenPos) % 4;
-    return bayer[idx.x][idx.y];
-}
-
 float StableDitherWS(float3 positionWS)
 {
     float3 p = floor(positionWS * 128.0);
