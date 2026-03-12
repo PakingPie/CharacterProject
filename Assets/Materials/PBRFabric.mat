@@ -29,6 +29,8 @@ Material:
   - Use Custom Cubemap
   - Use Reflective Probe
   - _FORWARDZWRITE_ON
+  - _USEANALYTICSOFTNESS_ON
+  - _USEDENIERFROMVERTEXR_ON
   - _USEPROCEDURALKNIT_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -37,7 +39,7 @@ Material:
   stringTagMap: {}
   disabledShaderPasses:
   - MOTIONVECTORS
-  m_LockedProperties: _GapOpacity
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -81,60 +83,64 @@ Material:
     m_Floats:
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 1
-    - _Anisotropy: 0.25
-    - _ClearCoat: 2
-    - _ClearCoatRoughness: 0.225
+    - _Anisotropy: 0
+    - _ClearCoat: 0.2
+    - _ClearCoatRoughness: 0.2
     - _DenierMax: 1
-    - _DenierMin: 0.3
+    - _DenierMin: 0.05
     - _DiffuseWrap: 0.11
     - _EnableEmission: 0
     - _F0: 0.04
+    - _FabricMicroNDFStrength: 1
+    - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
-    - _FresnelOpacityPower: 3
-    - _FresnelOpacityStrength: 0.5
+    - _FresnelOpacityPower: 1
+    - _FresnelOpacityStrength: 1
     - _FuzzIntensity: 0
     - _FuzzPower: 3
-    - _GapEdgeHighlight: 0.05
-    - _GapOpacity: 0
+    - _GapEdgeHighlight: 0
+    - _GapOpacity: 1
     - _GapShapePower: 2.5
-    - _GapWidthRatio: 1.2
+    - _GapWidthRatio: 2
     - _HeightScale: 0.02
     - _KnitCenterNormalWeakness: 0
     - _KnitFadeEnd: 0.7
     - _KnitFadeStart: 0.2
-    - _KnitJitter: 0.02
+    - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1.5
+    - _KnitNormalStrength: 1
     - _KnitRoughnessVar: 0
     - _KnitUVTiling: 20
-    - _LoopAspect: 1.5
+    - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 40
     - _Opacity: 1
-    - _OpeningSize: 0.05
-    - _OpeningSoftness: 0.2
-    - _Roughness: 0.3
-    - _SeeThruTint: 0
+    - _OpeningSize: 0.1
+    - _OpeningSoftness: 0.3
+    - _Roughness: 0.1
+    - _SeeThruTint: 0.95
     - _ShadowDensity: 0.5
     - _Sheen: 0
     - _SheenRoughness: 0.5
     - _SpecularTint: 1
-    - _StretchOpeningGrow: 1.5
+    - _StretchOpeningGrow: 2
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _Subsurface: 0
-    - _ThreadDarken: 0.664
-    - _ThreadWidth: 0.45
+    - _Subsurface: 0.1
+    - _ThreadDarken: 1
+    - _ThreadWidth: 0.3
     - _TransmissionDistortion: 0.5
-    - _TransmissionPower: 4
+    - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
-    - _TwoLayerPower: 3
-    - _TwoLayerSaturation: 0.25
+    - _TwoLayerPower: 1
+    - _TwoLayerSaturation: 1
     - _UseAOMap: 0
+    - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
+    - _UseAntiMoire: 0
     - _UseCustomCubemap: 1
-    - _UseDenierFromVertexR: 0
+    - _UseDenierFromVertexR: 1
     - _UseHeightMap: 0
     - _UseMetallicMap: 0
     - _UseNormalMap: 0

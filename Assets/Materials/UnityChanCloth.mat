@@ -97,7 +97,7 @@ Material:
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
-    - _FabricMicroNDFStrength: 0.542
+    - _FabricMicroNDFStrength: 1
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
     - _FresnelOpacityPower: 3
@@ -123,8 +123,8 @@ Material:
     - _Opacity: 1
     - _OpeningSize: 0.02
     - _OpeningSoftness: 0.2
-    - _Roughness: 0.202
-    - _SeeThruTint: 0.9
+    - _Roughness: 0.3
+    - _SeeThruTint: 0.85
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
@@ -132,10 +132,10 @@ Material:
     - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _Subsurface: 0
+    - _Subsurface: 0.1
     - _ThreadDarken: 0.8
-    - _ThreadWidth: 0.3
-    - _TransmissionDistortion: 0.2
+    - _ThreadWidth: 0.4
+    - _TransmissionDistortion: 0.725
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
     - _TwoLayerPower: 3

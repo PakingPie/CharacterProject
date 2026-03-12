@@ -27,7 +27,7 @@ Shader "Custom/FabricPBR_TextureBased"
         _AOMap("AO Map", 2D) = "white" {}
 
         [Header(Anisotropy)]
-        _Anisotropy("Anisotropy", Range(0,1)) = 0.5
+        _Anisotropy("Anisotropy", Range(-1,1)) = 0.5
         [Toggle(Use Anisotropy Map)] _UseAnisotropyMap("Use Anisotropy Map", Float) = 0
         _AnisotropyMap("Anisotropy Map", 2D) = "white" {}
 
@@ -45,8 +45,8 @@ Shader "Custom/FabricPBR_TextureBased"
         _HeightScale("Height Scale", Range(0, 0.1)) = 0.02
 
         [Header(Fabric Micro BRDF)]
-        _FabricSpecAttenuation("GGX Attenuation (0=fabric  1=standard)", Range(0,1)) = 0.3
-        _FabricMicroNDFStrength("Yarn-Loop Normal Tilt Strength", Range(0,1)) = 0.5
+        _FabricSpecAttenuation("GGX Attenuation (0=fabric  1=nylon-like)", Range(0,1)) = 0.8
+        _FabricMicroNDFStrength("Yarn-Loop Normal Tilt Strength", Range(0,1)) = 0.2
 
         [Header(Sheen  (velvet  felt  not nylon))]
         _Sheen("Sheen Intensity", Range(0,1)) = 0.0
@@ -81,11 +81,13 @@ Shader "Custom/FabricPBR_TextureBased"
 
         [Header(Denier Variation)]
         [Toggle] _UseDenierFromVertexR("Vertex Red = Denier Opacity", Float) = 0
-        _DenierMin("Min Denier Opacity", Range(0, 1)) = 0.3
-        _DenierMax("Max Denier Opacity", Range(0, 1)) = 1.0
+        // R=0 (thigh/calf, sheer) → opacity multiplied by this value.  0 = fully transparent.
+        // R=1 (ankle/knee, dense) → opacity unchanged (always 1.0 internally, never capped).
+        _DenierMin("Sheer Area Opacity  (R=0, thigh/calf)", Range(0, 1)) = 0.0
+        [HideInInspector] _DenierMax("Dense Area Opacity  (R=1, ankle/knee)", Range(0, 1)) = 1.0
 
         [Header(Clearcoat)]
-        _ClearCoat("Clear Coat", Range(0,10)) = 0.0
+        _ClearCoat("Clear Coat", Range(0,1)) = 0.0
         _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
 
         [Header(Transparency)]
@@ -338,13 +340,8 @@ Shader "Custom/FabricPBR_TextureBased"
                 // Fabric Micro-BRDF  (mirrors ProceduralPattern)
                 // ════════════════════════════════════════════
                 // ── 1. Specular attenuation ──────────────────
-                // Real fabric fibers scatter GGX broadly. Attenuate the
-                // Cook-Torrance lobe and clearcoat, letting Charlie sheen
-                // dominate — identical logic to the procedural knit shader.
-                // _FabricSpecAttenuation: 0 = full fabric, 1 = standard PBR.
                 float fabricSpecAtten = lerp(0.15, 1.0, _FabricSpecAttenuation);
                 float fabricCCAtten   = lerp(0.25, 1.0, _FabricSpecAttenuation);
-                float fabricSpecMul   = fabricSpecAtten;
 
                 // ── 2. Yarn-loop micro-NDF ────────────────────
                 // Mip filtering corrects colour/normal at distance but the
@@ -352,7 +349,6 @@ Shader "Custom/FabricPBR_TextureBased"
                 // GGX stripe on any cylinder. Fix: per-pixel stochastic
                 // tilt whose magnitude grows with UV pixel footprint,
                 // mirroring the cellsPerPx logic in the procedural shader.
-                // texelsPerPx ≈ 1 when one 512-px texture cell spans one pixel.
                 {
                     float2 uvDx = ddx(uv);
                     float2 uvDy = ddy(uv);
@@ -385,49 +381,43 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 tangentWS = normalize(IN.tangentWS.xyz
                 - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
-                float3 specNormalWS = normalWS;
-
-                float nov     = max(dot(normalWS,     viewDirWS), 0.0001);
-                float specNoV = max(dot(specNormalWS,  viewDirWS), 0.0001);
-
-                float clearcoatWeight = saturate(_ClearCoat);
+                float nov = max(dot(normalWS, viewDirWS), 0.0001);
 
                 // ══════════════════════════════════════════
                 // Opacity pipeline
                 // ══════════════════════════════════════════
-                float opacity = _Opacity;
-                float surfaceCoverage = saturate(_Opacity);
-                float reflectSurfaceCoverage = surfaceCoverage;
-                float reflectFiberDensity = 1.0;
+                float opacity = _Opacity * _BaseColor.a;
+                float surfaceCoverage = saturate(_Opacity * _BaseColor.a);
 
                 if (_UseOpacityMap > 0)
                 {
                     float opacityTex = SAMPLE_TEXTURE2D(_OpacityMap, sampler_OpacityMap, uv).r;
                     opacity *= opacityTex;
                     surfaceCoverage *= opacityTex;
-                    reflectSurfaceCoverage *= opacityTex;
                 }
 
                 if (_UseVertexAlpha > 0)
                 {
                     opacity *= IN.vertexColor.a;
                     surfaceCoverage *= IN.vertexColor.a;
-                    reflectSurfaceCoverage *= IN.vertexColor.a;
                 }
 
                 if (_UseDenierFromVertexR > 0)
                 {
-                    float denier = lerp(_DenierMin, _DenierMax,
+                    // lerp(_DenierMin, 1.0, R):
+                    //   R=0 (sheer zones: thigh/calf) → opacity *= _DenierMin  (near 0 = transparent)
+                    //   R=1 (dense zones: ankle/knee) → opacity *= 1.0         (no reduction)
+                    float denier = lerp(_DenierMin, 1.0,
                     IN.vertexColor.r);
                     opacity *= denier;
-                    reflectFiberDensity *= denier;
                 }
 
                 if (_FresnelOpacityStrength > 0)
                 {
                     float edgeOpacity = pow(1.0 - nov, _FresnelOpacityPower)
                     * _FresnelOpacityStrength;
-                    opacity = saturate(opacity + edgeOpacity);
+                    opacity = 1.0 - (1.0 - opacity) * (1.0 - edgeOpacity);
+                    opacity = saturate(opacity);
                 }
 
                 float twoLayerGrazing = 0.0;
@@ -464,8 +454,10 @@ Shader "Custom/FabricPBR_TextureBased"
                 * _SpecularColor.rgb;
                 float3 F0 = lerp(float3(_F0, _F0, _F0) * specTint, albedo, metallic);
 
-                float3 kS = FresnelSchlickRoughness(specNoV, F0, roughness);
-                float3 kD = (1.0 - kS) * (1.0 - metallic);
+                float sheenAlbedo = SheenDirectionalAlbedo(_Sheen, _SheenRoughness);
+
+                float3 kS = FresnelSchlickRoughness(nov, F0, roughness);
+                float3 kD = (1.0 - kS) * (1.0 - metallic) * (1.0 - sheenAlbedo);
 
                 InputData inputData = (InputData)0;
                 inputData.positionWS              = IN.positionWS;
@@ -494,11 +486,11 @@ Shader "Custom/FabricPBR_TextureBased"
                 float  indirectAO = min(ssao.y, ao);
                 float3 bakedIrradiance = inputData.bakedGI * indirectAO;
 
-                float2 brdf   = EnvBRDFApprox(roughness, specNoV);  // ← specNoV
+                float2 brdf   = EnvBRDFApprox(roughness, nov);
                 float  envLOD = roughness * 6.0;
 
                 IBLComponents ibl = CalculateIBLComponents(
-                specNormalWS, viewDirWS, IN.positionWS, screenUV,  // ← specNormalWS
+                normalWS, viewDirWS, IN.positionWS, screenUV,
                 albedo, roughness,
                 kS, kD,
                 brdf, envLOD,
@@ -509,7 +501,7 @@ Shader "Custom/FabricPBR_TextureBased"
                 {
                     indirectBodyLighting *= indirectAO;
                 }
-                float3 indirectReflectLighting = ibl.specular * indirectAO;
+                float3 indirectReflectLighting = ibl.specular * indirectAO * fabricSpecAtten;
 
                 if (_FuzzIntensity > 0)
                 {
@@ -531,8 +523,6 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 emission = _EnableEmission > 0
                 ? _EmissionColor.rgb : (float3)0;
 
-                float sheenAlbedo = SheenDirectionalAlbedo(_Sheen, _SheenRoughness);
-
                 // ══════════════════════════════════════════
                 //  MAIN LIGHT
                 // ══════════════════════════════════════════
@@ -545,27 +535,29 @@ Shader "Custom/FabricPBR_TextureBased"
                 (rawNdotL + _DiffuseWrap) / (1.0 + _DiffuseWrap));
 
                 float3 h   = normalize(viewDirWS + mainLight.direction);
-                float  noh = max(dot(specNormalWS, h), 0.0);   // ← specNormalWS
+                float  noh = max(dot(normalWS, h), 0.0);
                 float  voh = max(dot(viewDirWS, h), 0.0);
                 float  hol = max(dot(h, mainLight.direction), 0.0);
 
                 float3 F_direct = FresnelSchlick(voh, F0);
                 float  D_direct = DistributionGGXAnisotropic(
-                specNormalWS, tangentWS, h, roughness, anisotropy);  // ← specNormalWS
-                float  G_direct = GeometrySmithSchlickGGX(specNoV, nol, roughness);  // ← specNoV
+                normalWS, tangentWS, h, roughness, anisotropy);
+                float  G_direct = GeometrySmithSchlickGGX(nov, nol, roughness);
                 float3 specular = (D_direct * G_direct * F_direct)
-                / max(4.0 * specNoV * nol, 0.001) * fabricSpecMul;  // ← specNoV + fabricSpecMul
+                / max(4.0 * nov * nol, 0.001);
+
+                specular *= fabricSpecAtten;
 
                 float3 diffuse = (1.0 - F_direct) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
 
                 float3 sheen = EvaluateSheen(
                 _SheenColor.rgb, _Sheen, _SheenRoughness,
-                noh, specNoV, nol);                              // ← specNoV
+                noh, nov, nol);
 
                 float3 clearcoat = EvaluateClearcoat(
-                clearcoatWeight, 1.0 - _ClearCoatRoughness,
-                noh, hol, specNoV, nol);                         // ← specNoV
+                _ClearCoat, 1.0 - _ClearCoatRoughness,
+                noh, hol, nov, nol);
                 clearcoat *= fabricCCAtten;
 
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
@@ -606,26 +598,27 @@ Shader "Custom/FabricPBR_TextureBased"
                 (aRawNdotL + _DiffuseWrap) / (1.0 + _DiffuseWrap));
 
                 float3 aH   = normalize(viewDirWS + light.direction);
-                float  aNoH = max(dot(specNormalWS, aH), 0.0);    // ← specNormalWS
+                float  aNoH = max(dot(normalWS, aH), 0.0);
                 float  aVoH = saturate(dot(viewDirWS, aH));
                 float  aHoL = max(dot(aH, light.direction), 0.0);
 
                 float3 aF = FresnelSchlick(aVoH, F0);
 
                 float3 aSpec = EvaluateSpecular(
-                specNormalWS, viewDirWS, light.direction,       // ← specNormalWS
-                tangentWS, F0, roughness, anisotropy) * fabricSpecMul;  // ← fabricSpecMul
+                normalWS, viewDirWS, light.direction,
+                tangentWS, F0, roughness, anisotropy);
+                aSpec *= fabricSpecAtten;
 
                 float3 aDiff = (1.0 - aF) * (1.0 - metallic)
                 * (1.0 - sheenAlbedo) * albedo / PI;
 
                 float3 aSheen = EvaluateSheen(
                 _SheenColor.rgb, _Sheen, _SheenRoughness,
-                aNoH, specNoV, aNoL);
+                aNoH, nov, aNoL);
 
                 float3 aCC = EvaluateClearcoat(
-                clearcoatWeight, 1.0 - _ClearCoatRoughness,
-                aNoH, aHoL, specNoV, aNoL);
+                _ClearCoat, 1.0 - _ClearCoatRoughness,
+                aNoH, aHoL, nov, aNoL);
                 aCC *= fabricCCAtten;
 
                 float3 lightRad = light.color
@@ -664,11 +657,10 @@ Shader "Custom/FabricPBR_TextureBased"
                 fabricBodyColor = MixFog(fabricBodyColor, IN.fogFactor);
                 fabricReflectColor = MixFog(fabricReflectColor, IN.fogFactor);
 
-                float frontalFiberCoverage = saturate(reflectSurfaceCoverage);
-                float coverageForDepth = min(frontalFiberCoverage, 0.999);
-                float fiberOpticalDepth = -log(max(1.0 - coverageForDepth, 0.001))
-                                        * reflectFiberDensity;
-                float reflectCoverage = 1.0 - exp(-fiberOpticalDepth / max(specNoV, 0.001));
+                // Projected fiber coverage increases toward grazing angles,
+                // so front-surface reflection should fade much less than
+                // body transmission in sheer regions.
+                float reflectCoverage = saturate(surfaceCoverage / max(sqrt(nov), 0.35));
 
                 float3 finalColor = lerp(tintedScene, fabricBodyColor, opacity)
                 + fabricReflectColor * reflectCoverage;
@@ -766,7 +758,7 @@ Shader "Custom/FabricPBR_TextureBased"
                 opacity *= IN.vertexColor.a;
 
                 if (_UseDenierFromVertexR > 0)
-                opacity *= lerp(_DenierMin, _DenierMax, IN.vertexColor.r);
+                opacity *= lerp(_DenierMin, 1.0, IN.vertexColor.r);
 
                 opacity = saturate(opacity * _ShadowDensity);
 
@@ -849,7 +841,7 @@ Shader "Custom/FabricPBR_TextureBased"
                 opacity *= IN.vertexColor.a;
 
                 if (_UseDenierFromVertexR > 0)
-                opacity *= lerp(_DenierMin, _DenierMax, IN.vertexColor.r);
+                opacity *= lerp(_DenierMin, 1.0, IN.vertexColor.r);
 
                 opacity = saturate(opacity * _ShadowDensity);
 
