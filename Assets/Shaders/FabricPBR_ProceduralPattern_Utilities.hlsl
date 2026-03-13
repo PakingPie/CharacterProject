@@ -366,15 +366,8 @@ KnitResult EvaluateKnitSDF(
     float bumpFade = 1.0 - smoothstep(bumpStart, bumpEnd, cellsPerPx);
 
     // -------------------------------------------------------
-    // 3.  STOCHASTIC JITTER  (transition-zone noise)
+    // 3.  BRICK OFFSET & CELL COORDINATES
     // -------------------------------------------------------
-    // Per-pixel noise offset in grid space breaks the coherent
-    // periodic sampling that causes moiré.  Uses a grid-anchored
-    // hash so the jitter sticks to the fabric (no screen crawl).
-    float ign = KnitHash(floor(gridUV) + 53.7);
-    float stochActivation = smoothstep(bumpStart, _KnitFadeEnd, cellsPerPx);
-    gridUV += (ign - 0.5) * stochActivation * cellsPerPx * 0.5;
-
     // Brick offset on odd rows (half-cell shift)
     float rowIdx = floor(gridUV.y);
     float brick = fmod(abs(rowIdx), 2.0) * 0.5;

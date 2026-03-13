@@ -95,31 +95,11 @@ KnitSurfaceResult EvaluateKnitSurface(
     // ── Thread direction (blended to default at distance) ──
     r.threadDir = lerp(float2(1, 0), knit.threadDir, knit.fade);
 
-    // ── Far-field fabric noise ────────────
-    // When the SDF pattern fades (below Nyquist), replace it
-    // with smooth noise-based variation that preserves fabric
-    // character.  This is the procedural equivalent of what
-    // texture mipmapping provides — the pattern blurs rather
-    // than vanishing to flat plastic.
-    float farField = 1.0 - knit.fade;   // 0 close, 1 far
-    // Use multiple octaves at low frequency (safe from aliasing)
-    float2 farUV   = uv * 20.0;
-    float fnoise1  = FabricNoiseValue(farUV);
-    float fnoise2  = FabricNoiseValue(farUV * 1.7 + 31.5);
-    // Medium-frequency octave: fade it out past the distance where
-    // the noise lattice itself goes sub-pixel (prevents stipple aliasing).
-    float hiFreqFade = 1.0 - smoothstep(_KnitFadeEnd, _KnitFadeEnd * 3.0,
-                                         knit.cellsPerPx);
-    float fnoise3  = FabricNoiseValue(farUV * 4.3 + 17.2);
-    fnoise3 = lerp(0.5, fnoise3, hiFreqFade);
-
     // ── Thread mask ──────────────────────
-    // SDF detail at close range, noise-modulated average at distance.
-    // Stronger noise variation (±15%) so fabric character is clear.
-    float noiseVar = ((fnoise1 - 0.5) * 0.15
-                    + (fnoise3 - 0.5) * 0.08) * farField;
-    r.knitThreadMask = lerp(r.knitAvgThread + noiseVar,
-                             knit.threadMask, knit.fade);
+    // SDF detail at close range, clean analytic average at distance.
+    // No far-field noise: mipmapping converges to a flat average, so
+    // the procedural equivalent is simply knitAvgThread.
+    r.knitThreadMask = lerp(r.knitAvgThread, knit.threadMask, knit.fade);
     r.knitThreadMask = saturate(r.knitThreadMask);
 
     // Edge mask: Gaussian peak at gap boundary for specular
@@ -128,67 +108,33 @@ KnitSurfaceResult EvaluateKnitSurface(
                     * knit.fade;
 
     // ── Bump normal ──────────────────────
-    // SDF bump (already faded internally) + far-field fabric bump
+    // SDF bump only (already faded internally via bumpFade).
+    // No far-field noise bump — at distance the surface should be smooth.
     r.normalTS.xy += knit.bumpNormal.xy;
-    // Far-field bump attenuates at extreme distance to prevent
-    // noise-driven specular grain.
-    float farBumpAtten = 1.0 - smoothstep(_KnitFadeEnd, _KnitFadeEnd * 4.0,
-                                           knit.cellsPerPx);
-    float farBump = 0.15 * _KnitNormalStrength * farField * farBumpAtten;
-    r.normalTS.x += (fnoise1 - 0.5) * farBump;
-    r.normalTS.y += (fnoise2 - 0.5) * farBump;
-    r.normalTS.x += (fnoise3 - 0.5) * farBump * 0.5;
-
-    // ── Yarn-loop micro-NDF: stochastic normal tilt ──────────
-    // When cellsPerPx > 0 the resolved per-thread bump normal
-    // starts fading (bumpFade). What should replace it is the
-    // statistical distribution of yarn-loop surface normals —
-    // which point in ALL tangent directions around the loop arc.
-    // Model this as a per-pixel random tilt whose magnitude
-    // grows with cellsPerPx: breaks the cylindrical macro-normal
-    // pattern that causes the vertical GGX stripe.
-    // Use cellID-based hash so the tilt sticks to each stitch
-    // (no screen-space crawl).
-    float yarnStochFade = smoothstep(_KnitFadeStart * 0.2, _KnitFadeEnd * 0.73,
-                                     knit.cellsPerPx)
-                          * _FabricMicroNDFStrength;
-    float yarnAngle = KnitHash(knit.cellID + 17.3) * 6.2831853;
-    // Cap tilt to prevent unbounded growth at extreme distance
-    float yarnTilt  = yarnStochFade * min(knit.cellsPerPx, 2.0) * 0.3;
-    r.normalTS.x += cos(yarnAngle) * yarnTilt;
-    r.normalTS.y += sin(yarnAngle) * yarnTilt;
     r.normalTS = normalize(r.normalTS);
 
     // ── Thread darkening ─────────────────
     float darkening = (1.0 - knit.profile) * knit.threadMask
                       * _ThreadDarken;
     r.albedo *= 1.0 - darkening * knit.fade;
-    // Far-field subtle color variation
-    r.albedo *= 1.0 - (1.0 - fnoise1) * 0.04
-              * _ThreadDarken * farField;
 
     // ── Roughness variation ──────────────
+    // Near-field only: per-cell and fiber-scale variation, gated by fade.
     float cellRand = KnitHash(knit.cellID);
     float rVar = (cellRand - 0.5) * 2.0 * _KnitRoughnessVar;
 
-    // Fiber-scale noise (subtle high-freq variation per thread)
     float2 fiberUV = (frac(uv * _NumberOfLoops * _KnitUVTiling) - 0.5)
     * _KnitNoiseScale + knit.cellID * 1.7;
     float  fiberRnd = KnitHash(floor(fiberUV * 3.0));
     rVar += (fiberRnd - 0.5) * _KnitRoughnessVar * 0.5;
 
     r.roughness += rVar * knit.threadMask * knit.fade;
-    // Far-field roughness variation (fabric shimmer at distance)
-    r.roughness += (fnoise1 - 0.5) * _KnitRoughnessVar
-                 * 0.3 * farField;
     r.roughness = clamp(r.roughness, 0.045, 1.0);
 
     // ── Yarn-loop effective roughness ────────────────────────
-    // Hardware mip filtering widens the effective BRDF as a
-    // texture pattern goes sub-pixel (it integrates the NDF).
-    // We replicate that here: roughness grows with cellsPerPx
-    // so the GGX lobe broadens proportionally when yarn loops
-    // are smaller than a pixel.
+    // Physically correct: as yarn loops go sub-pixel, the effective
+    // BRDF widens (integrating over loop normals).  This broadens
+    // the GGX lobe proportionally — no noise injection needed.
     r.roughness = saturate(r.roughness + knit.cellsPerPx * 0.35
                              * _FabricMicroNDFStrength);
 

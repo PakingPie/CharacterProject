@@ -33,7 +33,6 @@ Material:
   - _ANISOTROPIC
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
-  - _USEANTIMOIRE_ON
   - _USEDENIERFROMVERTEXR_ON
   - _USEPROCEDURALKNIT_ON
   - _USESTRETCHFROMVERTEXG_ON
@@ -133,9 +132,10 @@ Material:
     - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _StripSpecAnisotropy: 0.95
-    - _StripSpecIntensity: 0.9
+    - _StripSpecAnisotropy: 0
+    - _StripSpecIntensity: 2
     - _StripSpecRoughness: 0.2
+    - _StripSpecWidth: 0.1
     - _Subsurface: 0.1
     - _ThreadDarken: 0.8
     - _ThreadWidth: 0.5
@@ -147,7 +147,7 @@ Material:
     - _UseAOMap: 0
     - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
-    - _UseAntiMoire: 1
+    - _UseAntiMoire: 0
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 1
     - _UseHeightMap: 0
