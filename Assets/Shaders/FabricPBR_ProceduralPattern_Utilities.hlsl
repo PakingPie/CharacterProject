@@ -98,6 +98,22 @@ float WardAnisotropicSpecular(float3 H, float3 T, float3 B, float3 N,
     return normalization * exp(exponent);
 }
 
+// ── Ward with independent T/B roughness ───────────
+float WardSpecularSplit(float3 H, float3 T, float3 B, float3 N,
+                        float roughnessT, float roughnessB)
+{
+    float TdotH = dot(T, H);
+    float BdotH = dot(B, H);
+    float NdotH = dot(N, H);
+
+    float normalization = rcp(PI * roughnessT * roughnessB);
+    float exponent = -(TdotH * TdotH / (roughnessT * roughnessT)
+                     + BdotH * BdotH / (roughnessB * roughnessB))
+                     / (NdotH * NdotH + 0.0001);
+
+    return normalization * exp(exponent);
+}
+
 // ── Anisotropic GGX NDF ─────────────────────
 float DistributionGGXAnisotropic(float3 N, float3 T, float3 H,
                                  float roughness, float anisotropy)

@@ -91,9 +91,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
         [Header(Strip Specular)]
         _StripSpecDirection("Fiber Direction (tangent space)", Vector) = (0, 1, 0, 0)
-        _StripSpecIntensity("Strip Intensity", Range(0, 1)) = 0.3
+        _StripSpecIntensity("Strip Intensity", Range(0, 3)) = 0.3
         _StripSpecRoughness("Strip Roughness", Range(0.01, 1)) = 0.5
         _StripSpecAnisotropy("Strip Anisotropy", Range(0, 1)) = 0.4
+        _StripSpecWidth("Strip Width (cross-fiber)", Range(0.01, 1)) = 0.3
 
         [Header(Clearcoat)]
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
@@ -538,12 +539,15 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 specular *= fabricSpecAtten;
 
                 // ── Strip specular (Ward BRDF + Fresnel) ────────
-                // Ward is a self-contained BRDF (normalization
-                // handles geometric spreading); only Fresnel is
-                // added for view-angle-dependent reflectance.
-                float  D_strip = WardAnisotropicSpecular(
+                // roughnessT: along-fiber spread (controlled by roughness + anisotropy)
+                // roughnessB: cross-fiber width (floored by _StripSpecWidth to
+                //             prevent collapse at high anisotropy)
+                float stripRoughT = _StripSpecRoughness * (1.0 + _StripSpecAnisotropy);
+                float stripRoughB = max(_StripSpecRoughness * (1.0 - _StripSpecAnisotropy),
+                                        _StripSpecWidth);
+                float  D_strip = WardSpecularSplit(
                     h, stripTangentWS, stripBitangentWS, normalWS,
-                    _StripSpecRoughness, _StripSpecAnisotropy);
+                    stripRoughT, stripRoughB);
                 float3 stripTerm = D_strip * F_direct
                     * _StripSpecIntensity * fabricSpecAtten;
 
@@ -616,9 +620,9 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 tangentWS, F0, roughness, anisotropy);
                 aSpec *= fabricSpecAtten;
 
-                float  aD_strip = WardAnisotropicSpecular(
+                float  aD_strip = WardSpecularSplit(
                     aH, stripTangentWS, stripBitangentWS, normalWS,
-                    _StripSpecRoughness, _StripSpecAnisotropy);
+                    stripRoughT, stripRoughB);
                 float3 aStripTerm = aD_strip * aF
                     * _StripSpecIntensity * fabricSpecAtten;
 

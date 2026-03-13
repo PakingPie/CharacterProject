@@ -221,12 +221,12 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: dbf11699a45dd074686123b0e90270df, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3184182198993219308, guid: dbf11699a45dd074686123b0e90270df, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: d2c7d8a365ad6154e9a971c4e15160a2, type: 2}
+      objectReference: {fileID: 2100000, guid: 58552e64f98a8a940a99959e89712fe2, type: 2}
     - target: {fileID: 3450836050442914133, guid: dbf11699a45dd074686123b0e90270df, type: 3}
       propertyPath: m_IsActive
       value: 1
@@ -269,7 +269,7 @@ MonoBehaviour:
   syntheticRestScale: 1
   areaStretchAtDense: 1
   areaStretchAtSheer: 3.5
-  denierAtNarrowest: 0.8
+  denierAtNarrowest: 1
   denierAtWidest: 0.2
   contrastPower: 3
   smoothingPasses: 4

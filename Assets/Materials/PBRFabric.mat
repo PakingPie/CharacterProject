@@ -101,8 +101,8 @@ Material:
     - _FuzzIntensity: 0
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
-    - _GapOpacity: 1
-    - _GapShapePower: 2.5
+    - _GapOpacity: 0
+    - _GapShapePower: 2
     - _GapWidthRatio: 2
     - _HeightScale: 0.02
     - _KnitCenterNormalWeakness: 0
@@ -110,7 +110,7 @@ Material:
     - _KnitFadeStart: 0.2
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 0.5
+    - _KnitNormalStrength: 0.8
     - _KnitRoughnessVar: 0.3
     - _KnitUVTiling: 20
     - _LoopAspect: 0.5
@@ -118,9 +118,9 @@ Material:
     - _NormalStrength: 1
     - _NumberOfLoops: 40
     - _Opacity: 1
-    - _OpeningSize: 0.01
-    - _OpeningSoftness: 0.2
-    - _Roughness: 0.2
+    - _OpeningSize: 0.1
+    - _OpeningSoftness: 0.3
+    - _Roughness: 0.15
     - _SeeThruTint: 0.9
     - _ShadowDensity: 1
     - _Sheen: 0
@@ -129,12 +129,12 @@ Material:
     - _StretchOpeningGrow: 1.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _StripSpecAnisotropy: 0.95
+    - _StripSpecAnisotropy: 0
     - _StripSpecIntensity: 1
-    - _StripSpecRoughness: 0.3
+    - _StripSpecRoughness: 0.1
     - _Subsurface: 0.1
     - _ThreadDarken: 1
-    - _ThreadWidth: 1
+    - _ThreadWidth: 0.3
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
@@ -156,7 +156,7 @@ Material:
     - _UseStretchFromVertexG: 1
     - _UseVertexAlpha: 0
     m_Colors:
-    - _BaseColor: {r: 0.15471691, g: 0.13866138, b: 0.13866138, a: 1}
+    - _BaseColor: {r: 0.3, g: 0.2, b: 0.2, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}

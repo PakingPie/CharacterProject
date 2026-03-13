@@ -92,6 +92,7 @@ CBUFFER_START(UnityPerMaterial)
     float  _StripSpecIntensity;
     float  _StripSpecRoughness;
     float  _StripSpecAnisotropy;
+    float  _StripSpecWidth;
 
     float  _UseReflectiveProbe;
     float  _UseCustomCubemap;
