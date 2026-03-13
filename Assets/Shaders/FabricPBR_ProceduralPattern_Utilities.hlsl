@@ -355,13 +355,15 @@ KnitResult EvaluateKnitSDF(
     o.cellsPerPx = cellsPerPx;
 
     // SDF detail fade:
-    //   < 0.25 cells/px →  fully resolved, show SDF
-    //   > 0.55 cells/px →  past Nyquist → far-field only
-    o.fade = 1.0 - smoothstep(0.25, 0.55, cellsPerPx);
+    //   < _KnitFadeStart cells/px →  fully resolved, show SDF
+    //   > _KnitFadeEnd   cells/px →  past Nyquist → far-field only
+    o.fade = 1.0 - smoothstep(_KnitFadeStart, _KnitFadeEnd, cellsPerPx);
 
     // Bump fades faster — specular shimmer is far more
     // perceptible than colour-level moiré.
-    float bumpFade = 1.0 - smoothstep(0.15, 0.45, cellsPerPx);
+    float bumpStart = _KnitFadeStart * 0.6;
+    float bumpEnd   = _KnitFadeEnd   * 0.82;
+    float bumpFade = 1.0 - smoothstep(bumpStart, bumpEnd, cellsPerPx);
 
     // -------------------------------------------------------
     // 3.  STOCHASTIC JITTER  (transition-zone noise)
@@ -370,7 +372,7 @@ KnitResult EvaluateKnitSDF(
     // periodic sampling that causes moiré.  Uses a grid-anchored
     // hash so the jitter sticks to the fabric (no screen crawl).
     float ign = KnitHash(floor(gridUV) + 53.7);
-    float stochActivation = smoothstep(0.15, 0.5, cellsPerPx);
+    float stochActivation = smoothstep(bumpStart, _KnitFadeEnd, cellsPerPx);
     gridUV += (ign - 0.5) * stochActivation * cellsPerPx * 0.5;
 
     // Brick offset on odd rows (half-cell shift)

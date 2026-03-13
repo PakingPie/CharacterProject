@@ -49,6 +49,8 @@ CBUFFER_START(UnityPerMaterial)
 
     float  _UseProceduralKnit;
     float  _UseAntiMoire;
+    float  _KnitFadeStart;
+    float  _KnitFadeEnd;
     float  _KnitUVTiling;
     float  _NumberOfLoops;
     float  _LoopAspect;

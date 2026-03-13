@@ -106,8 +106,12 @@ KnitSurfaceResult EvaluateKnitSurface(
     float2 farUV   = uv * 20.0;
     float fnoise1  = FabricNoiseValue(farUV);
     float fnoise2  = FabricNoiseValue(farUV * 1.7 + 31.5);
-    // Medium-frequency octave for more fabric texture
+    // Medium-frequency octave: fade it out past the distance where
+    // the noise lattice itself goes sub-pixel (prevents stipple aliasing).
+    float hiFreqFade = 1.0 - smoothstep(_KnitFadeEnd, _KnitFadeEnd * 3.0,
+                                         knit.cellsPerPx);
     float fnoise3  = FabricNoiseValue(farUV * 4.3 + 17.2);
+    fnoise3 = lerp(0.5, fnoise3, hiFreqFade);
 
     // ── Thread mask ──────────────────────
     // SDF detail at close range, noise-modulated average at distance.
@@ -126,7 +130,11 @@ KnitSurfaceResult EvaluateKnitSurface(
     // ── Bump normal ──────────────────────
     // SDF bump (already faded internally) + far-field fabric bump
     r.normalTS.xy += knit.bumpNormal.xy;
-    float farBump = 0.15 * _KnitNormalStrength * farField;
+    // Far-field bump attenuates at extreme distance to prevent
+    // noise-driven specular grain.
+    float farBumpAtten = 1.0 - smoothstep(_KnitFadeEnd, _KnitFadeEnd * 4.0,
+                                           knit.cellsPerPx);
+    float farBump = 0.15 * _KnitNormalStrength * farField * farBumpAtten;
     r.normalTS.x += (fnoise1 - 0.5) * farBump;
     r.normalTS.y += (fnoise2 - 0.5) * farBump;
     r.normalTS.x += (fnoise3 - 0.5) * farBump * 0.5;
@@ -141,10 +149,12 @@ KnitSurfaceResult EvaluateKnitSurface(
     // pattern that causes the vertical GGX stripe.
     // Use cellID-based hash so the tilt sticks to each stitch
     // (no screen-space crawl).
-    float yarnStochFade = smoothstep(0.05, 0.4, knit.cellsPerPx)
+    float yarnStochFade = smoothstep(_KnitFadeStart * 0.2, _KnitFadeEnd * 0.73,
+                                     knit.cellsPerPx)
                           * _FabricMicroNDFStrength;
     float yarnAngle = KnitHash(knit.cellID + 17.3) * 6.2831853;
-    float yarnTilt  = yarnStochFade * knit.cellsPerPx * 0.3;
+    // Cap tilt to prevent unbounded growth at extreme distance
+    float yarnTilt  = yarnStochFade * min(knit.cellsPerPx, 2.0) * 0.3;
     r.normalTS.x += cos(yarnAngle) * yarnTilt;
     r.normalTS.y += sin(yarnAngle) * yarnTilt;
     r.normalTS = normalize(r.normalTS);
