@@ -33,6 +33,7 @@ Material:
   - _ANISOTROPIC
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
+  - _USEANTIMOIRE_ON
   - _USEDENIERFROMVERTEXR_ON
   - _USEPROCEDURALKNIT_ON
   - _USESTRETCHFROMVERTEXG_ON
@@ -43,7 +44,7 @@ Material:
   stringTagMap: {}
   disabledShaderPasses:
   - MOTIONVECTORS
-  m_LockedProperties: 
+  m_LockedProperties: _OpeningSoftness
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -91,7 +92,7 @@ Material:
     - _AnisotropicRoughness: 1
     - _Anisotropy: 0
     - _ClearCoat: 0.2
-    - _ClearCoatRoughness: 0.1
+    - _ClearCoatRoughness: 0.8
     - _DenierMax: 1
     - _DenierMin: 0.05
     - _DiffuseWrap: 0.25
@@ -100,20 +101,20 @@ Material:
     - _FabricMicroNDFStrength: 1
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 1
-    - _FresnelOpacityPower: 3
+    - _FresnelOpacityPower: 1
     - _FresnelOpacityStrength: 1
     - _FuzzIntensity: 0
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
-    - _GapOpacity: 1
+    - _GapOpacity: 0
     - _GapShapePower: 2.5
     - _GapWidthRatio: 1.5
     - _HeightScale: 0.02
-    - _KnitFadeEnd: 2
-    - _KnitFadeStart: 1
-    - _KnitJitter: 0.15
+    - _KnitFadeEnd: 0.76
+    - _KnitFadeStart: 0.1
+    - _KnitJitter: 0
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 2
+    - _KnitNormalStrength: 0.8
     - _KnitRoughnessVar: 0.3
     - _KnitUVTiling: 12
     - _LoopAspect: 0.5
@@ -121,10 +122,10 @@ Material:
     - _NormalStrength: 1
     - _NumberOfLoops: 50
     - _Opacity: 1
-    - _OpeningSize: 0.25
-    - _OpeningSoftness: 0.1
-    - _Roughness: 0.3
-    - _SeeThruTint: 0.95
+    - _OpeningSize: 0.2
+    - _OpeningSoftness: 0.12
+    - _Roughness: 0.2
+    - _SeeThruTint: 0.9
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.45
@@ -132,10 +133,10 @@ Material:
     - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
     - _StretchTransparency: 1
-    - _StripSpecAnisotropy: 0
-    - _StripSpecIntensity: 2
-    - _StripSpecRoughness: 0.2
-    - _StripSpecWidth: 0.1
+    - _StripSpecAnisotropy: 0.2
+    - _StripSpecIntensity: 3
+    - _StripSpecRoughness: 0.3
+    - _StripSpecWidth: 0.3
     - _Subsurface: 0.1
     - _ThreadDarken: 0.8
     - _ThreadWidth: 0.5
@@ -147,7 +148,7 @@ Material:
     - _UseAOMap: 0
     - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
-    - _UseAntiMoire: 0
+    - _UseAntiMoire: 1
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 1
     - _UseHeightMap: 0
@@ -167,7 +168,7 @@ Material:
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 0.9, b: 0.85, a: 1}
-    - _StripSpecDirection: {r: 0, g: 1, b: 0, a: 0}
+    - _StripSpecDirection: {r: 1, g: 0, b: 0, a: 0}
     - _SubsurfaceColor: {r: 1, g: 0.72, b: 0.58, a: 1}
     - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []

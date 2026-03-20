@@ -115,6 +115,7 @@ Material:
     - _StripSpecAnisotropy: 0
     - _StripSpecIntensity: 0.167
     - _StripSpecRoughness: 0.2
+    - _StripSpecWidth: 0.3
     - _Subsurface: 0.1
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 4
