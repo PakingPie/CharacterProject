@@ -1,0 +1,135 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: HairAnisotropy
+  m_Shader: {fileID: 4800000, guid: 28e5f2f0ce629e34d87f484be4ad959e, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _RECALCULATECARDNORMALS
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses:
+  - MOTIONVECTORS
+  m_LockedProperties: _RootColor
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _AlphaDepth:
+        m_Texture: {fileID: 2800000, guid: 60d2fbf342535ff46be1433ffff1aef3, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _AnisoDir:
+        m_Texture: {fileID: 2800000, guid: 1a95ba32fc2a58040b2d84fff350943a, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Flowmap:
+        m_Texture: {fileID: 2800000, guid: f26da3101e1f3a3489eb90a27cce09f7, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Masks:
+        m_Texture: {fileID: 2800000, guid: 7934bd72aa90fee4386b29a3da1d0c41, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalTex:
+        m_Texture: {fileID: 2800000, guid: a31b2e6be04c22543a3cfccddf98f505, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - unity_Lightmaps:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - unity_LightmapsInd:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - unity_ShadowMasks:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AlphaClip: 1
+    - _AlphaToMask: 0
+    - _AmbientOcclusion: 0.5
+    - _BakedAmbientOcclusion: 0.5
+    - _Blend: 0
+    - _BlendModePreserveSpecular: 1
+    - _CastShadows: 1
+    - _Cull: 0
+    - _DstBlend: 10
+    - _Eccentric: 0.905
+    - _EccentricityMean: 0.07
+    - _GoingGrey: 0
+    - _MaxSmoothness: 0.6
+    - _MinSmoothness: 0.4
+    - _NormalScale: 1
+    - _OpacityFading: 0.05
+    - _OpacityMultiplier: 1
+    - _OpacityThreshold: 0.74
+    - _PerStrandHueVariation: 0.01
+    - _PerStrandSmoothnessVariation: 0.1
+    - _PrimaryShift: 0
+    - _QueueControl: 1
+    - _QueueOffset: 0
+    - _RECALCULATECARDNORMALS: 1
+    - _ReceiveShadows: 1
+    - _RootDistance: 0.25
+    - _RootFade: 0.5
+    - _Roughness: 1
+    - _SecondaryShift: 0.54
+    - _SecondarySpecularMultiplier: 2
+    - _Specular: 0.19
+    - _SpecularMultiplier1: 100
+    - _SpecularMultiplier2: 100
+    - _SpecularShift: 0.1
+    - _SrcBlend: 5
+    - _Surface: 1
+    - _Tip: 0.05
+    - _TipDistance: 0.25
+    - _TipFade: 0.5
+    - _WorkflowMode: 1
+    - _ZTest: 4
+    - _ZWrite: 0
+    - _ZWriteControl: 0
+    m_Colors:
+    - _Albedo: {r: 0.16226405, g: 0.08135826, b: 0.025411159, a: 1}
+    - _ColorVariationRange: {r: 1, g: 0, b: 0.94, a: 0.1}
+    - _HairStrandDirection: {r: 0, g: -1, b: 0, a: 0}
+    - _LengthColor: {r: 0.35999998, g: 0.19999996, b: 0.13999996, a: 1}
+    - _MainColor: {r: 0.16981131, g: 0.093907006, b: 0.029156279, a: 1}
+    - _RootColor: {r: 1, g: 0.058490515, b: 0.23345134, a: 1}
+    - _RoughnessRange: {r: 0.3, g: 0.5, b: 0, a: 0}
+    - _SpecularColor1: {r: 1, g: 1, b: 1, a: 1}
+    - _SpecularColor2: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+    - _Tiling: {r: 1, g: 1, b: 0, a: 0}
+    - _TipColor: {r: 1, g: 0, b: 0.46422625, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
+--- !u!114 &5950426558782877279
+MonoBehaviour:
+  m_ObjectHideFlags: 11
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  version: 9

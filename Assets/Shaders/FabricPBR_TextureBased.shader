@@ -108,6 +108,11 @@ Shader "Custom/FabricPBR_TextureBased"
         _FresnelOpacityStrength("Edge Opacity Boost", Range(0, 1)) = 0.0
         _SeeThruTint("See-Through Fabric Tint", Range(0, 1)) = 0.3
 
+        [Header(Baked Skin)]
+        [Toggle] _UseBakedSkin("Use Baked Skin (skip scene sample)", Float) = 0
+        _SkinColor("Skin Color", Color) = (0.87, 0.72, 0.63, 1)
+        _SkinTex("Skin Texture (optional)", 2D) = "white" {}
+
         [Header(Advanced)]
         _F0("F0 (Dielectric Reflectance)", Range(0,1)) = 0.04
         _TextureTiling("Texture Tiling", Vector) = (1,1,0,0)
@@ -170,6 +175,7 @@ Shader "Custom/FabricPBR_TextureBased"
             TEXTURE2D(_HeightMap);         SAMPLER(sampler_HeightMap);
             TEXTURE2D(_OpacityMap);        SAMPLER(sampler_OpacityMap);
             TEXTURECUBE(_CustomCubemap);   SAMPLER(sampler_CustomCubemap);
+            TEXTURE2D(_SkinTex);           SAMPLER(sampler_SkinTex);
 
             #include "FabricPBR_Common.hlsl"    // ★ shared CBUFFER
             #include "FabricPBR_TextureBased_Utilities.hlsl" // ★ shared BRDF/utilities
@@ -448,7 +454,9 @@ Shader "Custom/FabricPBR_TextureBased"
                 }
 
                 // ── Sample scene behind (skin) ───────────
-                float3 sceneColor = SampleSceneColor(screenUV);
+                float3 sceneColor = _UseBakedSkin > 0.5
+                    ? SAMPLE_TEXTURE2D(_SkinTex, sampler_SkinTex, IN.uv).rgb * _SkinColor.rgb
+                    : SampleSceneColor(screenUV);
 
                 float3 tintedScene = lerp(sceneColor,
                 sceneColor * albedo * 2.0,

@@ -99,6 +99,9 @@ CBUFFER_START(UnityPerMaterial)
     float  _UseReflectiveProbe;
     float  _UseCustomCubemap;
 
+    float  _UseBakedSkin;
+    float4 _SkinColor;
+
     float  _UseNormalMap;
     float  _UseMetallicMap;
     float  _UseRoughnessMap;
