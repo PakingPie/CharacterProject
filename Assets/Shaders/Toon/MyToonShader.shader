@@ -4,7 +4,7 @@ Shader "Unlit/MyToonShader"
     {
         // Clipping
         [Header(Clipping Attributes)]
-        [KeywordEnum(DISABLE, ENABLE)] _CLIPPING ("Use Clipping", Float) = 0
+        [KeywordEnum(DISABLE, ENABLE_STDMODE, ENABLE_TRANSMODE)] _CLIPPING ("Use Clipping", Float) = 0
         _ClippingMask("ClippingMask", 2D) = "white" {}
         [Toggle(_)] _InverseClipping("Inverse Clipping", Float) = 0
         _ClippingLevel("Clipping Level", Range(0, 1)) = 0
@@ -163,6 +163,7 @@ Shader "Unlit/MyToonShader"
         [Space(10)]
         [Header(Outline Attributes)]
         [KeywordEnum(NML, POS)] _OUTLINE ("Outline Mode", Float) = 0
+        [KeywordEnum(DISABLE, ENABLE)] _OUTLINE_CLIPPING ("Outline Clipping", Float) = 0
         [Enum(OFF,0, ON,1)]	_ZOverDrawMode("ZOver Draw Mode", Float) = 0  //OFF/ON
         _OutlineThickness ("Outline Thickness", Float) = 0
         _FarthestDistance ("Farthest Distance", Float ) = 100
@@ -214,7 +215,7 @@ Shader "Unlit/MyToonShader"
 
             #pragma target 3.5
 
-            #pragma multi_compile _DISABLE_OUTLINE_CLIPPING _ENABLE_OUTLINE_CLIPPING
+            #pragma multi_compile _OUTLINE_CLIPPING_DISABLE _OUTLINE_CLIPPING_ENABLE
             #pragma multi_compile _OUTLINE_NML _OUTLINE_POS
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -279,7 +280,7 @@ Shader "Unlit/MyToonShader"
             #pragma shader_feature _DISABLE_ANGELRING _ENABLE_ANGELRING 
             
             #pragma shader_feature _ USE_TOON_RAYTRACING_SHADOW
-            #pragma shader_feature _DISABLE_CLIPPING _ENABLE_CLIPPING_STDMODE _ENABLE_CLIPPING_TRANSMODE
+            #pragma shader_feature _CLIPPING_DISABLE _CLIPPING_ENABLE_STDMODE _CLIPPING_ENABLE_TRANSMODE
 
             #pragma shader_feature _EMISSIVE_SIMPLE _EMISSIVE_ANIMATION 
 

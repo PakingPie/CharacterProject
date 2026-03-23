@@ -209,18 +209,18 @@
         
         float4 mainTexColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, TRANSFORM_TEX(uv, _MainTex));
 
-        #if defined(_ENABLE_CLIPPING)
+        #if defined(_CLIPPING_ENABLE_STDMODE)
             float4 clippingMaskVal = SAMPLE_TEXTURE2D(_ClippingMask, sampler_MainTex, TRANSFORM_TEX(uv, _ClippingMask));
             float clipping = saturate(lerp(clippingMaskVal.r, (1.0 - clippingMaskVal.r), _InverseClipping) + _ClippingLevel);
             clip(clipping - 0.5);
-        #elif defined(_ENABLE_TRANSCLIPPING) || defined(_ENABLE_CLIPPING_TRANS_MODE)
+        #elif defined(_ENABLE_TRANSCLIPPING) || defined(_CLIPPING_ENABLE_TRANSMODE)
             float4 clippingMaskVal = SAMPLE_TEXTURE2D(_ClippingMask, sampler_MainTex, TRANSFORM_TEX(uv, _ClippingMask));
             float mainTexAlpha = mainTexColor.a;
             float baseMapAlphaAsClippingMask = lerp(clippingMaskVal.r, mainTexAlpha, _UseBaseMapAlphaAsClippingMask);
             float invClippingVal = lerp(baseMapAlphaAsClippingMask, (1.0 - baseMapAlphaAsClippingMask), _InverseClipping);
             float cliping = saturate((invClippingVal + _ClippingLevel));
             clip(cliping - 0.5);
-        #elif defined(_DISABLE_CLIPPING) || defined(_DISABLE_TRANSCLIPPING)
+        #elif defined(_CLIPPING_DISABLE) || defined(_DISABLE_TRANSCLIPPING)
             // No need implementation
         #endif
 

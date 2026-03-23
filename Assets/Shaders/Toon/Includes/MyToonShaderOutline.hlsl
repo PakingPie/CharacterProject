@@ -72,14 +72,14 @@ float4 frag(v2f i) : SV_Target
     float2 uv = i.uv;
     float4 mainTexVal = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, TRANSFORM_TEX(uv, _MainTex));
     float3 baseCol = _BaseColor.rgb * mainTexVal.rgb;
-    float3 blendBaseColVal = lerp(_OutlineColor.rgb * lightColor, (_OutlineColor.rgb * baseCol * baseCol * lightColor), _IsOutlineColorBlendBaseColor);
+    float3 blendBaseColVal = lerp(_OutlineColor.rgb * lightColor, (_OutlineColor.rgb * baseCol * baseCol * lightColor), _IsBlendBaseColor);
 
     float3 outlineTexColor = tex2D(_OutlineTex, TRANSFORM_TEX(uv, _OutlineTex)).rgb;
 
-#ifdef _DISABLE_OUTLINE_CLIPPING
-    float3 outputOutlineColor = lerp(blendBaseColVal, _OutlineColor.rgb * lightColor * outlineTexColor, _IsOutlineColorBlendBaseColor);
+#ifdef _OUTLINE_CLIPPING_DISABLE
+    float3 outputOutlineColor = lerp(blendBaseColVal, _OutlineColor.rgb * lightColor * outlineTexColor, _IsBlendBaseColor);
     return float4(outputOutlineColor, 1);
-#elif _ENABLE_OUTLINE_CLIPPING
+#elif _OUTLINE_CLIPPING_ENABLE
     float4 clippingMask = SAMPLE_TEXTURE2D(_ClippingMask, sampler_MainTex, TRANSFORM_TEX(uv, _ClippingMask));
     float mainTexAlpha = mainTexVal.a;
     float isBaseMapAlphaAsClippingMask = lerp(clippingMask.r, mainTexAlpha, _UseBaseMapAlphaAsClippingMask);

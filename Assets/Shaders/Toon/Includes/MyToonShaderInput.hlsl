@@ -135,7 +135,7 @@
         float _IsLightColorOutline;
         float _OutlineThickness;
         float4 _OutlineColor;
-        float _IsOutlineColorBlendBaseColor;
+        float _IsBlendBaseColor;
         float _FarthestDistance;
         float _NearestDistance;
         float _OffsetZ;
