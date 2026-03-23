@@ -289,8 +289,8 @@ Shader "Unlit/MyToonShader"
             #include "./Includes/MyToonShaderInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
             #include "./Includes/MyToonShaderUtilities.hlsl"
-            #include "./Includes/MyToonShader.hlsl"
-            // #include "./Includes/MyToonShaderWithFeather.hlsl"
+            // #include "./Includes/MyToonShader.hlsl"
+            #include "./Includes/MyToonShaderWithFeather.hlsl"
 
             ENDHLSL
         }

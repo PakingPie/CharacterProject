@@ -482,10 +482,9 @@
             #endif
             finalColor += pointLightColor;
         #endif
-        finalColor = SATURATE_IF_SDR(finalColor) + (envLightColor*envLightIntensity * _GIIntensity * smoothstep(1, 0, envLightIntensity/2)) + emissive;
-        finalColor = envLightColor;
-        return half4(finalColor, 1.0);
 
-        // return half4(finalColor, 1.0);     
+        finalColor = SATURATE_IF_SDR(finalColor) + (envLightColor*envLightIntensity * _GIIntensity * smoothstep(1, 0, envLightIntensity/2)) + emissive;
+
+        return half4(finalColor, 1.0);
     }
 #endif
