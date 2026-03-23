@@ -101,7 +101,7 @@ Material:
     - _FuzzPower: 3
     - _HeightScale: 0
     - _Metallic: 0
-    - _NormalStrength: 0.8
+    - _NormalStrength: 0.5
     - _Opacity: 0.8
     - _Roughness: 0.1
     - _SeeThruTint: 0
@@ -113,9 +113,9 @@ Material:
     - _StretchReference: 0.01
     - _StretchTransparency: 1
     - _StripSpecAnisotropy: 1
-    - _StripSpecIntensity: 1
+    - _StripSpecIntensity: 3
     - _StripSpecRoughness: 0.5
-    - _StripSpecWidth: 0.4
+    - _StripSpecWidth: 0.3
     - _Subsurface: 0.1
     - _TransmissionDistortion: 0.8
     - _TransmissionPower: 2

@@ -172,7 +172,7 @@ Material:
     - _BlendLightColorAndBaseColor: 1
     - _BlendLightColorToRimLightColor: 1
     - _BlendModePreserveSpecular: 1
-    - _BlendSecondShadowAndLightColor: 0
+    - _BlendSecondShadowAndLightColor: 1
     - _BlurLevelMatCap: 0
     - _BlurLevelSGM: 0
     - _BumpScale: 1
