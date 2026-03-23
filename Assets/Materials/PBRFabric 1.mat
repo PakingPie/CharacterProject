@@ -92,8 +92,8 @@ Material:
     - _DiffuseWrap: 0.5
     - _EnableEmission: 0
     - _F0: 0.04
-    - _FabricMicroNDFStrength: 1
-    - _FabricSpecAttenuation: 1
+    - _FabricMicroNDFStrength: 0.648
+    - _FabricSpecAttenuation: 0
     - _ForwardZWrite: 1
     - _FresnelOpacityPower: 1
     - _FresnelOpacityStrength: 0.5
