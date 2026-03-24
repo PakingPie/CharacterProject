@@ -598,6 +598,20 @@ Shader "Custom/FabricPBR_Reference"
                 return float4(saturate(height), threadMask, edgeMask, 0);
             }
 
+            // 4×4 ordered-dither threshold (Bayer matrix)
+            float DitherThreshold4x4(float2 screenPos)
+            {
+                static const float thresholds[16] =
+                {
+                    1.0/17.0,  9.0/17.0,  3.0/17.0, 11.0/17.0,
+                    13.0/17.0,  5.0/17.0, 15.0/17.0,  7.0/17.0,
+                    4.0/17.0, 12.0/17.0,  2.0/17.0, 10.0/17.0,
+                    16.0/17.0,  8.0/17.0, 14.0/17.0,  6.0/17.0
+                };
+                uint2 p = uint2(floor(screenPos)) % 4;
+                return thresholds[p.y * 4 + p.x];
+            }
+
             float InterleavedGradientNoise(float2 screenPos)
             {
                 float3 magic = float3(0.06711056, 0.00583715, 52.9829189);
@@ -1251,6 +1265,20 @@ Shader "Custom/FabricPBR_Reference"
                 return OUT;
             }
 
+            // 4×4 ordered-dither threshold (Bayer matrix)
+            float DitherThreshold4x4(float2 screenPos)
+            {
+                static const float thresholds[16] =
+                {
+                    1.0/17.0,  9.0/17.0,  3.0/17.0, 11.0/17.0,
+                    13.0/17.0,  5.0/17.0, 15.0/17.0,  7.0/17.0,
+                    4.0/17.0, 12.0/17.0,  2.0/17.0, 10.0/17.0,
+                    16.0/17.0,  8.0/17.0, 14.0/17.0,  6.0/17.0
+                };
+                uint2 p = uint2(floor(screenPos)) % 4;
+                return thresholds[p.y * 4 + p.x];
+            }
+
             half4 ShadowFrag(Varyings IN) : SV_TARGET
             {
                 float opacity = _Opacity * _BaseColor.a;
@@ -1316,6 +1344,20 @@ Shader "Custom/FabricPBR_Reference"
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
                 return OUT;
+            }
+
+            // 4×4 ordered-dither threshold (Bayer matrix)
+            float DitherThreshold4x4(float2 screenPos)
+            {
+                static const float thresholds[16] =
+                {
+                    1.0/17.0,  9.0/17.0,  3.0/17.0, 11.0/17.0,
+                    13.0/17.0,  5.0/17.0, 15.0/17.0,  7.0/17.0,
+                    4.0/17.0, 12.0/17.0,  2.0/17.0, 10.0/17.0,
+                    16.0/17.0,  8.0/17.0, 14.0/17.0,  6.0/17.0
+                };
+                uint2 p = uint2(floor(screenPos)) % 4;
+                return thresholds[p.y * 4 + p.x];
             }
 
             half DepthFrag(Varyings IN) : SV_TARGET
