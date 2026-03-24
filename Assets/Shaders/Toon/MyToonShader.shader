@@ -9,7 +9,7 @@ Shader "Unlit/MyToonShader"
         [Toggle(_)] _InverseClipping("Inverse Clipping", Float) = 0
         _ClippingLevel("Clipping Level", Range(0, 1)) = 0
         _TweakTransparency("Tweak_transparency", Range(-1, 1)) = 0
-        [HideInInspector] _UseBaseMapAlphaAsClippingMask("IsBaseMapAlphaAsClippingMask", Float) = 0
+        [Toggle(_)]_UseBaseMapAlphaAsClippingMask("IsBaseMapAlphaAsClippingMask", Float) = 0
         
         // Main Textures
         [Space(10)]
