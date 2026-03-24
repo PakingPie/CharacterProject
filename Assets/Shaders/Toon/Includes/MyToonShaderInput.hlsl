@@ -132,14 +132,15 @@
         // Outline attributes
         float4 _OutlineTex_ST;
         half _UseOutlineTex;
-        float _IsLightColorOutline;
+        float _IsBlendLightColorToOutline;
         float _OutlineThickness;
         float4 _OutlineColor;
-        float _IsBlendBaseColor;
+        float _IsBlendBaseColorToOutline;
         float _FarthestDistance;
         float _NearestDistance;
         float _OffsetZ;
         float _Cutoff;
+        float4 _OutlineSampler_ST;
 
         float4 _BakedNormalTex_ST;
         half _UseBakedNormal;
@@ -191,7 +192,7 @@
     sampler2D _EmissiveTex;
     TEXTURE2D(_ClippingMask);
     sampler2D _AngelRingTex;
-    sampler2D _Outline_Sampler;
+    sampler2D _OutlineSampler;
     sampler2D _OutlineTex;
     sampler2D _BakedNormalTex;
 

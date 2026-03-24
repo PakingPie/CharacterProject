@@ -110,7 +110,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MatCapTex:
-        m_Texture: {fileID: 2800000, guid: 763c5d30206d1d54a9b49b3309e37fe1, type: 3}
+        m_Texture: {fileID: 2800000, guid: 474235e5e41d9f74496f0fffd449e47b, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
@@ -126,6 +126,10 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OcclusionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _OutlineSampler:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
@@ -223,6 +227,8 @@ Material:
     - _IsBlendAddToHighlighColor: 0
     - _IsBlendAddToMatCap: 1
     - _IsBlendBaseColor: 1
+    - _IsBlendBaseColorToOutline: 1
+    - _IsBlendLightColorToOutline: 1
     - _IsFilterHiCutPointLightColor: 1
     - _IsFilterLightColor: 0
     - _IsLightColorOutline: 1

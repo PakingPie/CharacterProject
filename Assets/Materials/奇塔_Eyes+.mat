@@ -12,11 +12,13 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _CLIPPING_ENABLE
+  - _CLIPPING_ENABLE_STDMODE
   - _EMISSIVE_SIMPLE
+  - _OUTLINE_CLIPPING_DISABLE
   - _OUTLINE_NML
   m_InvalidKeywords:
   - _
+  - _CLIPPING_ENABLE
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -222,6 +224,7 @@ Material:
     - _Metallic: 0
     - _NearestDistance: 0.5
     - _OUTLINE: 0
+    - _OUTLINE_CLIPPING: 0
     - _OcclusionStrength: 1
     - _OffsetXAxisBLD: -0.05
     - _OffsetYAxisBLD: 0.09

@@ -163,20 +163,23 @@ Shader "Unlit/MyToonShader"
         [Space(10)]
         [Header(Outline Attributes)]
         [KeywordEnum(NML, POS)] _OUTLINE ("Outline Mode", Float) = 0
-        [KeywordEnum(DISABLE, ENABLE)] _OUTLINE_CLIPPING ("Outline Clipping", Float) = 0
-        [Enum(OFF,0, ON,1)]	_ZOverDrawMode("ZOver Draw Mode", Float) = 0  //OFF/ON
         _OutlineThickness ("Outline Thickness", Float) = 0
         _FarthestDistance ("Farthest Distance", Float ) = 100
         _NearestDistance ("Nearest Distance", Float ) = 0.5
+        _OutlineSampler ("Outline Sampler", 2D) = "white" {}
         _OutlineColor ("Outline Color", Color) = (0.5,0.5,0.5,1)
+        [Toggle(_)] _IsBlendBaseColorToOutline ("Use_BlendBaseColor", Float ) = 0
+        [Toggle(_)] _IsBlendLightColorToOutline ("Use LightColor Outline", Float ) = 1
+        [HideInInspector] _Cutoff("Alpha cutoff", Range(0, 1)) = 0.5
+
         [Toggle(_)] _UseOutlineTex ("Use Outline Texture", Float ) = 0
         _OutlineTex ("Outline Texture", 2D) = "white" {}
         _Offset_Z ("Offset Camera Z", Float) = 0
         [Toggle(_)] _UseBakedNormal ("Use Baked Normal", Float ) = 0
         _BakedNormalTex ("Baked Normal for Outline", 2D) = "white" {}
-        [Toggle(_)] _IsBlendBaseColor ("Use_BlendBaseColor", Float ) = 0
-        [Toggle(_)] _IsLightColorOutline ("Use LightColor Outline", Float ) = 1
-        [HideInInspector] _Cutoff("Alpha cutoff", Range(0, 1)) = 0.5
+
+        [KeywordEnum(DISABLE, ENABLE)] _OUTLINE_CLIPPING ("Outline Clipping", Float) = 0
+        [Enum(OFF,0, ON,1)]	_ZOverDrawMode("ZOver Draw Mode", Float) = 0  //OFF/ON
         
         // GI Attributes
         [Space(10)]
