@@ -118,7 +118,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OutlineSampler:
-        m_Texture: {fileID: 2800000, guid: 134966e3fbedc674ea419707cf30151f, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OutlineTex:
@@ -232,7 +232,7 @@ Material:
     - _OffsetXAxisBLD: -0.05
     - _OffsetYAxisBLD: 0.09
     - _Offset_Z: 0
-    - _OutlineThickness: 4
+    - _OutlineThickness: 2
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1

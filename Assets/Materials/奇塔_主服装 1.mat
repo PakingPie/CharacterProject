@@ -192,7 +192,7 @@ Material:
     - _BlendLightColorToRimLightColor: 1
     - _BlendModePreserveSpecular: 1
     - _BlendSecondShadowAndLightColor: 1
-    - _BlurLevelMatCap: 10
+    - _BlurLevelMatCap: 1
     - _BlurLevelSGM: 0
     - _BumpScale: 1
     - _BumpScaleMatCap: 1
@@ -315,12 +315,12 @@ Material:
     - _ColorShift: {r: 0, g: 0, b: 0, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _EmissiveColor: {r: 0, g: 0, b: 0, a: 1}
-    - _FirstShadowTexColor: {r: 0.9, g: 0.9, b: 0.9, a: 1}
+    - _FirstShadowTexColor: {r: 1, g: 1, b: 1, a: 1}
     - _HighlightColor: {r: 0, g: 0, b: 0, a: 1}
     - _MatCapColor: {r: 1, g: 1, b: 1, a: 1}
     - _OutlineColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimLightColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SecondShadowTexColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+    - _SecondShadowTexColor: {r: 0.8, g: 0.8, b: 0.8, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _ViewShift: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []

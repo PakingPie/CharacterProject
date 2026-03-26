@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class FaceworksRenderer : MonoBehaviour
+public class SkinRenderer : MonoBehaviour
 {
     [SerializeField] private MeshFilter _meshFilter;
     [field: SerializeField] public int CurvatureSmoothIterations { get; private set; } = 3;

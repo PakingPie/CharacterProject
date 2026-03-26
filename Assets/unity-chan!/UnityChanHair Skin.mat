@@ -232,7 +232,7 @@ Material:
     - _OffsetXAxisBLD: -0.05
     - _OffsetYAxisBLD: 0.09
     - _Offset_Z: 0
-    - _OutlineThickness: 4
+    - _OutlineThickness: 2
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
