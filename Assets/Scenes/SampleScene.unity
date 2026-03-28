@@ -317,8 +317,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.4000347, y: 0.013196782, z: -0.005760427, w: 0.9163869}
-  m_LocalPosition: {x: -1.0025387, y: 0.35970402, z: -1.1622705}
+  m_LocalRotation: {x: 0.0381244, y: -0.33364502, z: 0.01350601, w: 0.94183075}
+  m_LocalPosition: {x: -0.87736046, y: 0.59604144, z: -0.2035625}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -348,7 +348,7 @@ MonoBehaviour:
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
   m_RenderPostProcessing: 1
-  m_Antialiasing: 3
+  m_Antialiasing: 1
   m_AntialiasingQuality: 2
   m_StopNaN: 0
   m_Dithering: 0
@@ -946,7 +946,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: dc3b49affe32dc24c8904c6ebad61794, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3910459619781537344, guid: dc3b49affe32dc24c8904c6ebad61794, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'

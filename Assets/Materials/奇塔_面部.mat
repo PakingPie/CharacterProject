@@ -117,6 +117,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _OutlineSampler:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _OutlineTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -192,7 +196,7 @@ Material:
     - _DstBlendAlpha: 0
     - _EMISSIVE: 0
     - _EnvironmentReflections: 1
-    - _FarthestDistance: 100
+    - _FarthestDistance: 10
     - _FirstAndSecondShadesFeather: 0.0001
     - _FirstShadowColorFeather: 0.0001
     - _FirstShadowColorStep: 0.5
@@ -208,6 +212,8 @@ Material:
     - _IsBlendAddToHighlighColor: 0
     - _IsBlendAddToMatCap: 1
     - _IsBlendBaseColor: 1
+    - _IsBlendBaseColorToOutline: 1
+    - _IsBlendLightColorToOutline: 1
     - _IsFilterHiCutPointLightColor: 1
     - _IsFilterLightColor: 0
     - _IsLightColorOutline: 1
@@ -221,7 +227,7 @@ Material:
     - _LightDirectionMaskOn: 0
     - _MatCap: 0
     - _Metallic: 0
-    - _NearestDistance: 0.5
+    - _NearestDistance: 0.1
     - _OUTLINE: 0
     - _OUTLINE_CLIPPING: 0
     - _OcclusionStrength: 1
