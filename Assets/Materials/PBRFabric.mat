@@ -108,41 +108,41 @@ Material:
     - _GapEdgeHighlight: 0
     - _GapOpacity: 0
     - _GapShapePower: 2.5
-    - _GapWidthRatio: 1.5
+    - _GapWidthRatio: 2
     - _HeightScale: 0.02
     - _KnitCenterNormalWeakness: 0
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 0.01
     - _KnitJitter: 0
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 0.5
-    - _KnitRoughnessVar: 0
-    - _KnitUVTiling: 30
+    - _KnitNormalStrength: 1.5
+    - _KnitRoughnessVar: 0.3
+    - _KnitUVTiling: 20
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 40
-    - _Opacity: 0.8
-    - _OpeningSize: 0.16
-    - _OpeningSoftness: 0.15
+    - _Opacity: 1
+    - _OpeningSize: 0.2
+    - _OpeningSoftness: 0.3
     - _Roughness: 0.08
-    - _SeeThruTint: 0.879
+    - _SeeThruTint: 0.5
     - _ShadowDensity: 1
     - _Sheen: 0
     - _SheenRoughness: 0.5
     - _SpecularTint: 1
-    - _StretchOpeningGrow: 0.87
+    - _StretchOpeningGrow: 0.5
     - _StretchReference: 0.01
-    - _StretchTransparency: 2
+    - _StretchTransparency: 1
     - _StripSpecAnisotropy: 0.5
     - _StripSpecIntensity: 3
-    - _StripSpecRoughness: 0.1
+    - _StripSpecRoughness: 0.01
     - _StripSpecWidth: 1
     - _StripWideLobeScale: 10
     - _StripWideLobeWeight: 1
     - _Subsurface: 0.1
     - _ThreadDarken: 1
-    - _ThreadWidth: 0.4
+    - _ThreadWidth: 0.25
     - _TransmissionDistortion: 0.5
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
@@ -169,8 +169,8 @@ Material:
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SkinColor: {r: 1, g: 0.8, b: 0.7, a: 1}
-    - _SpecularColor: {r: 0.5924529, g: 0.5924529, b: 0.5924529, a: 1}
+    - _SkinColor: {r: 1, g: 0.8, b: 0.75, a: 1}
+    - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _StripSpecDirection: {r: 1, g: 0, b: 0, a: 0}
     - _SubsurfaceColor: {r: 1, g: 0.8, b: 0.75, a: 1}
     - _TextureTiling: {r: 1, g: 1, b: 0, a: 0}

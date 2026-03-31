@@ -24,6 +24,8 @@ struct KnitSurfaceResult
     float3 albedo;          // Albedo after thread darkening
     float  roughness;       // Roughness after knit variation
     float2 threadDir;       // Thread tangent direction (blended to (1,0) at distance)
+    float  cellsPerPx;      // Grid cells per pixel (for specular AA in fragment)
+    float  bumpVariance;    // Analytical bump normal variance (for specular AA)
 };
 
 KnitSurfaceResult EvaluateKnitSurface(
@@ -44,6 +46,8 @@ KnitSurfaceResult EvaluateKnitSurface(
     r.albedo         = albedo;
     r.roughness      = roughness;
     r.threadDir      = float2(1, 0);
+    r.cellsPerPx     = 0.0;
+    r.bumpVariance   = 0.0;
 
     if (_UseProceduralKnit <= 0)
         return r;
@@ -92,31 +96,37 @@ KnitSurfaceResult EvaluateKnitSurface(
         positionCS.xy
     );
 
+    // ── Nyquist anti-alias clamp ─────────
+    // Suppress SDF detail when cells approach sub-pixel size,
+    // regardless of the artist's fade band setting.
+    float aaFade = 1.0 - smoothstep(0.2, 0.5, knit.cellsPerPx);
+    float effectiveFade = min(knit.fade, aaFade);
+
     // ── Thread direction (blended to default at distance) ──
-    r.threadDir = lerp(float2(1, 0), knit.threadDir, knit.fade);
+    r.threadDir = lerp(float2(1, 0), knit.threadDir, effectiveFade);
 
     // ── Thread mask ──────────────────────
     // SDF detail at close range, clean analytic average at distance.
     // No far-field noise: mipmapping converges to a flat average, so
     // the procedural equivalent is simply knitAvgThread.
-    r.knitThreadMask = lerp(r.knitAvgThread, knit.threadMask, knit.fade);
+    r.knitThreadMask = lerp(r.knitAvgThread, knit.threadMask, effectiveFade);
     r.knitThreadMask = saturate(r.knitThreadMask);
 
     // Edge mask: Gaussian peak at gap boundary for specular
     float edgeSigma = max(_OpeningSoftness * 0.7, 0.001);
     r.knitEdgeMask = exp(-pow(knit.threadDist / edgeSigma, 2.0))
-                    * knit.fade;
+                    * effectiveFade;
 
     // ── Bump normal ──────────────────────
     // SDF bump only (already faded internally via bumpFade).
     // No far-field noise bump — at distance the surface should be smooth.
-    r.normalTS.xy += knit.bumpNormal.xy;
+    r.normalTS.xy += knit.bumpNormal.xy * saturate(aaFade);
     r.normalTS = normalize(r.normalTS);
 
     // ── Thread darkening ─────────────────
     float darkening = (1.0 - knit.profile) * knit.threadMask
                       * _ThreadDarken;
-    r.albedo *= 1.0 - darkening * knit.fade;
+    r.albedo *= 1.0 - darkening * effectiveFade;
 
     // ── Roughness variation ──────────────
     // Near-field only: per-cell and fiber-scale variation, gated by fade.
@@ -128,15 +138,19 @@ KnitSurfaceResult EvaluateKnitSurface(
     float  fiberRnd = KnitHash(floor(fiberUV * 3.0));
     rVar += (fiberRnd - 0.5) * _KnitRoughnessVar * 0.5;
 
-    r.roughness += rVar * knit.threadMask * knit.fade;
+    r.roughness += rVar * knit.threadMask * effectiveFade;
     r.roughness = clamp(r.roughness, 0.045, 1.0);
 
-    // ── Yarn-loop effective roughness ────────────────────────
-    // Physically correct: as yarn loops go sub-pixel, the effective
-    // BRDF widens (integrating over loop normals).  This broadens
-    // the GGX lobe proportionally — no noise injection needed.
-    r.roughness = saturate(r.roughness + knit.cellsPerPx * 0.35
-                             * _FabricMicroNDFStrength);
+    // ── Specular AA: cellsPerPx + analytical bump variance ──
+    // Export for strip/clearcoat broadening in the fragment shader.
+    r.cellsPerPx = knit.cellsPerPx;
+
+    r.bumpVariance = 0.0;
+
+    // GGX roughness broadening: cellsPerPx-based.
+    float specAA = knit.cellsPerPx * 0.35 * _FabricMicroNDFStrength;
+    r.roughness  = sqrt(r.roughness * r.roughness + specAA * specAA);
+    r.roughness  = clamp(r.roughness, 0.045, 1.0);
 
     return r;
 }

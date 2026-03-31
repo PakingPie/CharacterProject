@@ -549,13 +549,24 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 specular *= fabricSpecAtten;
 
+                // ── Specular AA: broaden strip & clearcoat roughness ──
+                float knitCPP = knitResult.cellsPerPx;
+                float stripSpecAA = knitCPP * 0.35 * _FabricMicroNDFStrength;
+
+                float stripRoughT_base = _StripSpecRoughness * (1.0 + _StripSpecAnisotropy);
+                float stripRoughB_base = max(_StripSpecRoughness * (1.0 - _StripSpecAnisotropy),
+                                             _StripSpecWidth);
+                float stripRoughT = sqrt(stripRoughT_base * stripRoughT_base
+                                       + stripSpecAA * stripSpecAA);
+                float stripRoughB = sqrt(stripRoughB_base * stripRoughB_base
+                                       + stripSpecAA * stripSpecAA);
+
+                float ccRoughBase = _ClearCoatRoughness;
+                float ccSpecAA    = knitCPP * 0.20 * _FabricMicroNDFStrength;
+                float ccRoughAA   = sqrt(ccRoughBase * ccRoughBase
+                                       + ccSpecAA * ccSpecAA);
+
                 // ── Strip specular (Ward BRDF + Fresnel) ────────
-                // roughnessT: along-fiber spread (controlled by roughness + anisotropy)
-                // roughnessB: cross-fiber width (floored by _StripSpecWidth to
-                //             prevent collapse at high anisotropy)
-                float stripRoughT = _StripSpecRoughness * (1.0 + _StripSpecAnisotropy);
-                float stripRoughB = max(_StripSpecRoughness * (1.0 - _StripSpecAnisotropy),
-                                        _StripSpecWidth);
                 float  D_strip = WardSpecularSplit(
                     h, stripTangentWS, stripBitangentWS, normalWS,
                     stripRoughT, stripRoughB);
@@ -570,7 +581,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 noh, nov, nol);
 
                 float3 clearcoat = EvaluateClearcoat(
-                _ClearCoat, 1.0 - _ClearCoatRoughness,
+                _ClearCoat, 1.0 - ccRoughAA,
                 noh, hol, nov, nol);
                 clearcoat *= fabricCCAtten;
 
@@ -645,7 +656,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 aNoH, nov, aNoL);
 
                 float3 aCC = EvaluateClearcoat(
-                _ClearCoat, 1.0 - _ClearCoatRoughness,
+                _ClearCoat, 1.0 - ccRoughAA,
                 aNoH, aHoL, nov, aNoL);
                 aCC *= fabricCCAtten;
 
