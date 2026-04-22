@@ -33,7 +33,7 @@ Material:
   - _ANISOTROPIC
   - _FORWARDZWRITE_ON
   - _USEANALYTICSOFTNESS_ON
-  - _USEDENIERFROMVERTEXR_ON
+  - _USEBAKEDSKIN_ON
   - _USEPROCEDURALKNIT_ON
   - _USESTRETCHFROMVERTEXG_ON
   m_LightmapFlags: 4
@@ -97,7 +97,7 @@ Material:
     - _ClearCoat: 0.2
     - _ClearCoatRoughness: 0.8
     - _DenierMax: 1
-    - _DenierMin: 0.05
+    - _DenierMin: 0
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.05
@@ -110,39 +110,39 @@ Material:
     - _FuzzPower: 3
     - _GapEdgeHighlight: 0
     - _GapOpacity: 0
-    - _GapShapePower: 2.5
-    - _GapWidthRatio: 1.5
+    - _GapShapePower: 2
+    - _GapWidthRatio: 3
     - _HeightScale: 0.02
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 0.01
-    - _KnitJitter: 0
+    - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
     - _KnitNormalStrength: 1.5
     - _KnitRoughnessVar: 0.3
-    - _KnitUVTiling: 8
+    - _KnitUVTiling: 30
     - _LoopAspect: 0.5
     - _Metallic: 0
     - _NormalStrength: 1
     - _NumberOfLoops: 40
     - _Opacity: 1
-    - _OpeningSize: 0.2
+    - _OpeningSize: 0.1
     - _OpeningSoftness: 0.3
-    - _Roughness: 0.2
-    - _SeeThruTint: 0
+    - _Roughness: 0.08
+    - _SeeThruTint: 0.9
     - _ShadowDensity: 2
     - _Sheen: 0
     - _SheenRoughness: 0.45
     - _SpecularTint: 0
-    - _StretchOpeningGrow: 0.5
+    - _StretchOpeningGrow: 2
     - _StretchReference: 0.01
     - _StretchTransparency: 1
     - _StripSpecAnisotropy: 0
-    - _StripSpecIntensity: 3
+    - _StripSpecIntensity: 2
     - _StripSpecRoughness: 0.01
     - _StripSpecWidth: 1
     - _Subsurface: 0
-    - _ThreadDarken: 0.8
-    - _ThreadWidth: 0.5
+    - _ThreadDarken: 1
+    - _ThreadWidth: 1
     - _TransmissionDistortion: 0.725
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
@@ -152,9 +152,9 @@ Material:
     - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
     - _UseAntiMoire: 0
-    - _UseBakedSkin: 0
+    - _UseBakedSkin: 1
     - _UseCustomCubemap: 0
-    - _UseDenierFromVertexR: 1
+    - _UseDenierFromVertexR: 0
     - _UseHeightMap: 0
     - _UseMetallicMap: 0
     - _UseNormalMap: 0

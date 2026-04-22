@@ -7,83 +7,98 @@ Shader "Custom/BasePBR"
         _BaseColor("Base Color", Color) = (1,1,1,1)
 
         [Header(Normal Map)]
-        [Toggle(Use Normal Map)] _UseNormalMap("Use Normal Map", Float) = 0
+        [Toggle(_USE_NORMAL_MAP)] _UseNormalMap("Use Normal Map", Float) = 0
         _NormalMap("Normal Map", 2D) = "bump" {}
 
         [Header(Metallic)]
         _Metallic("Metallic", Range(0,1)) = 0.0
-        [Toggle(Use Metallic Map)] _UseMetallicMap("Use Metallic Map", Float) = 0
+        [Toggle(_USE_METALLIC_MAP)] _UseMetallicMap("Use Metallic Map", Float) = 0
         _MetallicMap("Metallic Map", 2D) = "white" {}
 
-        [Header(Roughness)] 
-        _Roughness("Roughness", Range(0,1)) = 0.5
-        [Toggle(Use Roughness Map)] _UseRoughnessMap("Use Roughness Map", Float) = 0
+        [Header(Roughness)]
+        _Roughness("Roughness (perceptual)", Range(0,1)) = 0.5
+        [Toggle(_USE_ROUGHNESS_MAP)] _UseRoughnessMap("Use Roughness Map", Float) = 0
         _RoughnessMap("Roughness Map", 2D) = "white" {}
 
         [Header(Ambient Occlusion)]
         _AmbientOcclusion("Ambient Occlusion", Range(0,1)) = 1.0
-        [Toggle(Use AO Map)] _UseAOMap("Use AO Map", Float) = 0
-        _AOMap("AO Map", 2D) = "white" {}
+        [Toggle(_USE_AO_MAP)] _UseAOMap("Use AO Map", Float) = 0
+        _AOMap("AO Map (G channel)", 2D) = "white" {}
 
         [Header(Anisotropy)]
-        _Anisotropy("Anisotropy", Range(0,1)) = 0.5
-        [Toggle(Use Anisotropy Map)] _UseAnisotropyMap("Use Anisotropy Map", Float) = 0
+        _Anisotropy("Anisotropy", Range(0,1)) = 0.0
+        _AnisotropicRotation("Anisotropic Rotation", Range(0,1)) = 0.0
+        [Toggle(_USE_ANISOTROPY_MAP)] _UseAnisotropyMap("Use Anisotropy Map", Float) = 0
         _AnisotropyMap("Anisotropy Map", 2D) = "white" {}
 
-        [Header(Specular Highlights)]
+        [Header(Specular Tint)]
         _SpecularColor("Specular Color", Color) = (1,1,1,1)
-        _SpecularIntensity("Specular Intensity", Range(0,1)) = 1.0
+        _SpecularTint("Specular Tint (Disney)", Range(0,1)) = 0.0
 
         [Header(Emission)]
         _EmissionColor("Emission Color", Color) = (0,0,0,1)
-        [Toggle(Enable Emission)] _EnableEmission("Enable Emission", Float) = 0
+        [Toggle(_ENABLE_EMISSION)] _EnableEmission("Enable Emission", Float) = 0
 
-        [Header(Height Map)]
-        [Toggle(Use Height Map)] _UseHeightMap("Use Height Map", Float) = 0
-        _HeightMap("Height Map", 2D) = "black" {}
+        [Header(Height Map / Parallax)]
+        [Toggle(_USE_HEIGHT_MAP)] _UseHeightMap("Use Height Map", Float) = 0
+        _HeightMap("Height Map (R)", 2D) = "black" {}
+        _HeightScale("Height Scale", Range(0, 0.1)) = 0.02
 
         [Header(Advanced Options)]
-        _F0("F0", Range(0,1)) = 0.04
+        _F0("Dielectric F0", Range(0,1)) = 0.04
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
-        _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
+        _ClearCoatRoughness("Clear Coat Roughness (perceptual)", Range(0,1)) = 0.5
         _Sheen("Sheen", Range(0,1)) = 0.0
         _SheenColor("Sheen Color", Color) = (1,1,1,1)
+        _SheenTint("Sheen Tint (Disney)", Range(0,1)) = 0.5
         _TextureTiling("Texture Tiling", Vector) = (1,1,0,0)
 
         [Header(Reflection)]
-        [Toggle(Use Reflective Probe)] _UseReflectiveProbe("Use Reflective Probe", Float) = 0
-        [Toggle(Use Custom Cubemap)] _UseCustomCubemap("Use Custom Cubemap", Float) = 0
+        [Toggle(_USE_REFLECTIVE_PROBE)] _UseReflectiveProbe("Use Reflective Probe", Float) = 0
+        [Toggle(_USE_CUSTOM_CUBEMAP)] _UseCustomCubemap("Use Custom Cubemap", Float) = 0
         _CustomCubemap("Custom Cubemap", Cube) = "" {}
     }
 
     SubShader
     {
         Tags { "RenderPipeline" = "UniversalPipeline" "RenderType" = "Opaque" "Queue" = "Geometry" }
-        Pass
-        {
-            Tags { "LightMode" = "UniversalForward" }
 
-            Cull Back
-            ZWrite On
-            ZTest LEqual
-
-            HLSLPROGRAM
-
+        // Shared CBUFFER + texture decls available to every pass.
+        HLSLINCLUDE
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            
-            #pragma vertex vert
-            #pragma fragment frag
 
-            #pragma multi_compile_frag _MAIN_LIGHT_SHADOWS_CASCADE
-            #pragma multi_compile _ _SOFT_SHADOWS
-            #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
-            #pragma multi_compile _ _SHADOWS_SHADOWMASK
-            #pragma multi_compile _ _LIGHTMAP_SHADOW_MIXING
-            #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
-            
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseColor;
+                float  _Metallic;
+                float  _Roughness;
+                float  _AmbientOcclusion;
+                float  _Anisotropy;
+                float  _AnisotropicRotation;
+                float4 _SpecularColor;
+                float  _SpecularTint;
+                float4 _EmissionColor;
+                float  _EnableEmission;
+                float  _F0;
+                float  _ClearCoat;
+                float  _ClearCoatRoughness;
+                float  _Sheen;
+                float4 _SheenColor;
+                float  _SheenTint;
+                float4 _TextureTiling;
+                float4 _MainTex_ST;
+                float  _HeightScale;
 
-            // Textures and samplers must live outside the CBuffer
+                // Toggles kept in CBUFFER for SRP-batcher compatibility.
+                float  _UseReflectiveProbe;
+                float  _UseCustomCubemap;
+                float  _UseNormalMap;
+                float  _UseMetallicMap;
+                float  _UseRoughnessMap;
+                float  _UseAOMap;
+                float  _UseAnisotropyMap;
+                float  _UseHeightMap;
+            CBUFFER_END
+
             TEXTURE2D(_MainTex);         SAMPLER(sampler_MainTex);
             TEXTURE2D(_NormalMap);       SAMPLER(sampler_NormalMap);
             TEXTURE2D(_MetallicMap);     SAMPLER(sampler_MetallicMap);
@@ -92,77 +107,101 @@ Shader "Custom/BasePBR"
             TEXTURE2D(_AnisotropyMap);   SAMPLER(sampler_AnisotropyMap);
             TEXTURE2D(_HeightMap);       SAMPLER(sampler_HeightMap);
             TEXTURECUBE(_CustomCubemap); SAMPLER(sampler_CustomCubemap);
+        ENDHLSL
 
-            CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor;
-                float _Metallic;
-                float _Roughness;
-                float _AmbientOcclusion;
-                float _Anisotropy;
-                float4 _SpecularColor;
-                float _SpecularIntensity;
-                float4 _EmissionColor;
-                float _EnableEmission;
-                float _F0;
-                float _ClearCoat;
-                float _ClearCoatRoughness;
-                float _Sheen;
-                float4 _SheenColor;
-                float4 _TextureTiling;
-                float4 _MainTex_ST;
+        // ─────────────────────────────────────────────────────────────
+        // Forward Lit
+        // ─────────────────────────────────────────────────────────────
+        Pass
+        {
+            Name "ForwardLit"
+            Tags { "LightMode" = "UniversalForward" }
 
-                // Reflection
-                float _UseReflectiveProbe;
-                float _UseCustomCubemap;
+            Cull Back
+            ZWrite On
+            ZTest LEqual
 
-                // Toggles
-                float _UseNormalMap;
-                float _UseMetallicMap;
-                float _UseRoughnessMap;
-                float _UseAOMap;
-                float _UseAnisotropyMap;
-                float _UseHeightMap;
-            CBUFFER_END
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            // Material features
+            #pragma shader_feature_local _USE_NORMAL_MAP
+            #pragma shader_feature_local _USE_METALLIC_MAP
+            #pragma shader_feature_local _USE_ROUGHNESS_MAP
+            #pragma shader_feature_local _USE_AO_MAP
+            #pragma shader_feature_local _USE_ANISOTROPY_MAP
+            #pragma shader_feature_local _USE_HEIGHT_MAP
+            #pragma shader_feature_local _USE_REFLECTIVE_PROBE
+            #pragma shader_feature_local _USE_CUSTOM_CUBEMAP
+            #pragma shader_feature_local _ENABLE_EMISSION
+
+            // URP forward keywords
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
+            #pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
+            #pragma multi_compile_fragment _ _LIGHT_LAYERS
+            #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
+
+            // GI / lightmap
+            #pragma multi_compile _ LIGHTMAP_ON
+            #pragma multi_compile _ DYNAMICLIGHTMAP_ON
+            #pragma multi_compile _ DIRLIGHTMAP_COMBINED
+            #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
+            #pragma multi_compile _ SHADOWS_SHADOWMASK
+            #pragma multi_compile _ USE_APV_PROBE_OCCLUSION
+            #pragma multi_compile _ EVALUATE_SH_MIXED EVALUATE_SH_VERTEX
+            #pragma multi_compile _ PROBE_VOLUMES_L1 PROBE_VOLUMES_L2
+
+            #pragma multi_compile_fog
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             struct Attributes
             {
-                float4 positionOS : POSITION;
-                float3 normalOS : NORMAL;
-                float4 tangentOS : TANGENT;
-                float2 texcoord : TEXCOORD0;
-                float2 staticLightmapUV   : TEXCOORD1;
-                float2 dynamicLightmapUV  : TEXCOORD2;
+                float4 positionOS        : POSITION;
+                float3 normalOS          : NORMAL;
+                float4 tangentOS         : TANGENT;
+                float2 texcoord          : TEXCOORD0;
+                float2 staticLightmapUV  : TEXCOORD1;
+                float2 dynamicLightmapUV : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
             {
-                float4 positionCS : SV_POSITION;
+                float4 positionCS  : SV_POSITION;
+                float2 uv          : TEXCOORD0;
+                float3 positionWS  : TEXCOORD1;
+                float4 normalWS    : TEXCOORD2;   // xyz: N,  w: viewDir.x
+                float4 tangentWS   : TEXCOORD3;   // xyz: T,  w: viewDir.y
+                float4 bitangentWS : TEXCOORD4;   // xyz: B,  w: viewDir.z
 
-                float2 uv : TEXCOORD0;
-                float3 positionWS : TEXCOORD1;
-                // Normal
-                float4 normalWS                   : TEXCOORD2;    // xyz: normal, w: viewDir.x
-                float4 tangentWS                  : TEXCOORD3;    // xyz: tangent, w: viewDir.y
-                float4 bitangentWS                : TEXCOORD4;    // xyz: bitangent, w: viewDir.z
-                
                 #ifdef _ADDITIONAL_LIGHTS_VERTEX
-                    half3 vertexLighting            : TEXCOORD5; // xyz: vertex light
+                    half3  vertexLighting : TEXCOORD5;
                 #endif
 
                 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-                    float4 shadowCoord              : TEXCOORD6;
+                    float4 shadowCoord    : TEXCOORD6;
                 #endif
 
                 DECLARE_LIGHTMAP_OR_SH(staticLightmapUV, vertexSH, 7);
 
                 #ifdef DYNAMICLIGHTMAP_ON
-                    float2  dynamicLightmapUV : TEXCOORD8; // Dynamic lightmap UVs
+                    float2 dynamicLightmapUV : TEXCOORD8;
                 #endif
 
                 #ifdef USE_APV_PROBE_OCCLUSION
                     float4 probeOcclusion : TEXCOORD9;
                 #endif
+
+                float fogFactor    : TEXCOORD10;
 
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
@@ -171,204 +210,45 @@ Shader "Custom/BasePBR"
             Varyings vert(Attributes IN)
             {
                 Varyings OUT = (Varyings)0;
-
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
 
-                VertexPositionInputs vertexInput = GetVertexPositionInputs(IN.positionOS.xyz);
-                VertexNormalInputs normalInput = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
+                VertexPositionInputs vIn = GetVertexPositionInputs(IN.positionOS.xyz);
+                VertexNormalInputs   nIn = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
 
-                OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
-                OUT.positionWS = vertexInput.positionWS;
-                OUT.positionCS = vertexInput.positionCS;
+                OUT.uv         = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
+                OUT.positionWS = vIn.positionWS;
+                OUT.positionCS = vIn.positionCS;
 
-                float3 viewDirWS = GetWorldSpaceNormalizeViewDir(vertexInput.positionWS);
-                OUT.normalWS = float4(normalInput.normalWS, viewDirWS.x);
-                OUT.tangentWS = float4(normalInput.tangentWS, viewDirWS.y);
-                OUT.bitangentWS = float4(normalInput.bitangentWS, viewDirWS.z);
+                float3 viewDirWS = GetWorldSpaceNormalizeViewDir(vIn.positionWS);
+                OUT.normalWS    = float4(nIn.normalWS,    viewDirWS.x);
+                OUT.tangentWS   = float4(nIn.tangentWS,   viewDirWS.y);
+                OUT.bitangentWS = float4(nIn.bitangentWS, viewDirWS.z);
 
                 OUTPUT_LIGHTMAP_UV(IN.staticLightmapUV, unity_LightmapST, OUT.staticLightmapUV);
                 #ifdef DYNAMICLIGHTMAP_ON
                     OUT.dynamicLightmapUV = IN.dynamicLightmapUV.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
                 #endif
-                OUTPUT_SH4(vertexInput.positionWS, OUT.normalWS.xyz, GetWorldSpaceNormalizeViewDir(vertexInput.positionWS), OUT.vertexSH, OUT.probeOcclusion);
+                OUTPUT_SH4(vIn.positionWS, OUT.normalWS.xyz, viewDirWS, OUT.vertexSH, OUT.probeOcclusion);
 
                 #ifdef _ADDITIONAL_LIGHTS_VERTEX
-                    half3 vertexLight = VertexLighting(vertexInput.positionWS, normalInput.normalWS);
-                    OUT.vertexLighting = vertexLight;
+                    OUT.vertexLighting = VertexLighting(vIn.positionWS, nIn.normalWS);
                 #endif
 
                 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-                    OUT.shadowCoord = GetShadowCoord(vertexInput);
+                    OUT.shadowCoord = GetShadowCoord(vIn);
                 #endif
+
+                OUT.fogFactor = ComputeFogFactor(vIn.positionCS.z);
                 return OUT;
             }
 
-            void InitializeInputData(Varyings IN, half3 normalTS, out InputData inputData)
-            {
-                inputData = (InputData)0;
+            // ============================================================
+            //                Disney Principled BRDF helpers
+            // ============================================================
 
-                inputData.positionWS = IN.positionWS;
-                inputData.positionCS = IN.positionCS;
-
-                half3 viewDirWS = half3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w);
-                if (_UseNormalMap > 0)
-                inputData.normalWS = TransformTangentToWorld(normalTS,
-                half3x3(IN.tangentWS.xyz, IN.bitangentWS.xyz, IN.normalWS.xyz));
-                else
-                inputData.normalWS = IN.normalWS.xyz;
-
-                inputData.normalWS = NormalizeNormalPerPixel(inputData.normalWS);
-                viewDirWS = SafeNormalize(viewDirWS);
-
-                inputData.viewDirectionWS = viewDirWS;
-
-                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-                    inputData.shadowCoord = IN.shadowCoord;
-                #elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
-                    inputData.shadowCoord = TransformWorldToShadowCoord(inputData.positionWS);
-                #else
-                    inputData.shadowCoord = float4(0, 0, 0, 0);
-                #endif
-
-                #ifdef _ADDITIONAL_LIGHTS_VERTEX
-                    inputData.vertexLighting = IN.vertexLighting.xyz;
-                #else
-                    inputData.vertexLighting = half3(0, 0, 0);
-                #endif
-
-                inputData.fogCoord = 0; // we don't apply fog in the gbuffer pass
-                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionCS);
-
-                #if defined(DEBUG_DISPLAY)
-                    #if defined(DYNAMICLIGHTMAP_ON)
-                        inputData.dynamicLightmapUV = IN.dynamicLightmapUV;
-                    #endif
-                    #if defined(LIGHTMAP_ON)
-                        inputData.staticLightmapUV = IN.staticLightmapUV;
-                    #else
-                        inputData.vertexSH = IN.vertexSH;
-                    #endif
-                    #if defined(USE_APV_PROBE_OCCLUSION)
-                        inputData.probeOcclusion = IN.probeOcclusion;
-                    #endif
-                #endif
-            }
-
-            void InitializeBakedGIData(Varyings IN, inout InputData inputData)
-            {
-                #if defined(_SCREEN_SPACE_IRRADIANCE)
-                    inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, IN.positionCS.xy);
-                #elif defined(DYNAMICLIGHTMAP_ON)
-                    inputData.bakedGI = SAMPLE_GI(IN.staticLightmapUV, IN.dynamicLightmapUV, IN.vertexSH, inputData.normalWS);
-                    inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
-                #elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
-                    inputData.bakedGI = SAMPLE_GI(IN.vertexSH,
-                    GetAbsolutePositionWS(inputData.positionWS),
-                    inputData.normalWS,
-                    inputData.viewDirectionWS,
-                    inputData.positionCS.xy,
-                    IN.probeOcclusion,
-                    inputData.shadowMask);
-                #else
-                    inputData.bakedGI = SAMPLE_GI(IN.staticLightmapUV, IN.vertexSH, inputData.normalWS);
-                    inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
-                #endif
-            }
-
-            inline void InitializeSimpleLitSurfaceData(float2 uv, out SurfaceData surfaceData)
-            {
-                surfaceData = (SurfaceData)0;
-
-                surfaceData.albedo = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).rgb;
-                surfaceData.specular = _SpecularColor.rgb * _SpecularIntensity;
-                surfaceData.metallic = _Metallic;
-                surfaceData.smoothness = 1.0 - _Roughness;
-                surfaceData.normalTS = _UseNormalMap > 0 ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv)) : float3(0, 0, 1);
-                surfaceData.emission = _EnableEmission > 0 ? _EmissionColor.rgb : float3(0, 0, 0);
-                surfaceData.occlusion = _AmbientOcclusion;
-                surfaceData.alpha = _BaseColor.a * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).a;
-                surfaceData.clearCoatMask = _ClearCoat;
-                surfaceData.clearCoatSmoothness = 1.0 - _ClearCoatRoughness;
-            }
-
-            float2 AmbientSampleSSAO(float2 screenPos)
-            {
-                float DirectAO;
-                float IndirectAO;
-                #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT) && !defined(SHADERGRAPH_PREVIEW)
-                    float ssao = saturate(SampleAmbientOcclusion(screenPos) + (1.0 - _AmbientOcclusionParam.x));
-                    IndirectAO = ssao;
-                    DirectAO = lerp(1.0, ssao, _AmbientOcclusionParam.w);
-                #else
-                    DirectAO = 1.0;
-                    IndirectAO = 1.0;
-                #endif
-
-                return float2(DirectAO, IndirectAO);
-            }
-
-            float3 CalculateBakedIrradiance(Varyings IN, float2 screenPos, float ambientOcclusion)
-            {
-                float2 ambientSSAO = AmbientSampleSSAO(screenPos);
-                float indirectAO = min(ambientSSAO.y, ambientOcclusion);
-
-                SurfaceData surfaceData;
-                InitializeSimpleLitSurfaceData(IN.uv, surfaceData);
-
-                InputData inputData;
-                InitializeInputData(IN, surfaceData.normalTS, inputData);
-                SETUP_DEBUG_TEXTURE_DATA(inputData, UNDO_TRANSFORM_TEX(IN.uv, _MainTex));
-
-                InitializeBakedGIData(IN, inputData);
-
-                float3 ssao = inputData.bakedGI * indirectAO;
-                
-                return ssao;
-            }
-
-            // Returns combined IBL specular + diffuse contribution.
-            // bakedIrradiance: ssao (bakedGI * AO) used as irradiance source for the probe path.
-            float3 CalculateIBL(
-            float3 normalWS, float3 viewDirWS, float3 positionWS, float2 screenUV,
-            float3 albedo,   float   roughness,
-            float3 kS,       float3  kD,
-            float2 brdf,     float   envLOD,
-            float3 bakedIrradiance)
-            {
-                float3 envContribution = 0;
-                float3 irradianceIBL   = 0;
-
-                if (_UseCustomCubemap > 0)
-                {
-                    float3 reflectDir = reflect(-viewDirWS, normalWS);
-
-                    // IBL Specular: prefiltered env × (F × scale + bias)
-                    float3 prefilteredColor = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, reflectDir, envLOD).rgb;
-                    envContribution = prefilteredColor * (kS * brdf.x + brdf.y);
-
-                    // IBL Diffuse: max-LOD sample as irradiance proxy; apply kD and albedo
-                    float3 irradiance = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, normalWS, 6.0).rgb;
-                    irradianceIBL = kD * albedo * irradiance;
-                }
-                else if (_UseReflectiveProbe > 0)
-                {
-                    float3 reflectDir = reflect(-viewDirWS, normalWS);
-
-                    // IBL Specular via Unity reflection probe (handles probe blending + HDR decode)
-                    float3 prefilteredColor = GlossyEnvironmentReflection(reflectDir, positionWS, roughness, 1.0, screenUV);
-                    envContribution = prefilteredColor * (kS * brdf.x + brdf.y);
-
-                    // IBL Diffuse: baked SH/lightmap irradiance, apply kD and albedo
-                    irradianceIBL = kD * albedo * bakedIrradiance;
-                }
-
-                return envContribution + irradianceIBL;
-            }
-
-            // Analytical approximation of the split-sum BRDF LUT (Karis / UE4)
-            // Replaces the expensive per-pixel Monte Carlo integration.
+            // Karis env-BRDF LUT approximation (split-sum)
             float2 EnvBRDFApprox(float roughness, float NoV)
             {
                 const float4 c0 = float4(-1.0, -0.0275, -0.572,  0.022);
@@ -378,229 +258,641 @@ Shader "Custom/BasePBR"
                 return float2(-1.04, 1.04) * a004 + r.zw;
             }
 
-            float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
-            {
-                return F0 + (max((float3)(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-            }
-
             float3 FresnelSchlick(float cosTheta, float3 F0)
             {
-                return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+                return F0 + (1.0 - F0) * pow(saturate(1.0 - cosTheta), 5.0);
             }
 
-            // N, T, H must be in the same space (world). Bitangent derived as cross(N,T).
-            float DistributionGGXAnisotropic(float3 N, float3 T, float3 H, float roughness)
+            float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
             {
-                float aspect = sqrt(1.0 - 0.9 * _Anisotropy); // remap [0,1] anisotropy to [1,0.316] aspect ratio
-                float ax = max(0.001, roughness * roughness / aspect);
-                float ay = max(0.001, roughness * roughness * aspect);
-                float XoH = dot(T, H);
-                float YoH = dot(cross(N, T), H);
-                float NoH = max(dot(N, H), 0.0);
-                float d = XoH * XoH / (ax * ax) + YoH * YoH / (ay * ay) + NoH * NoH;
-                return rcp(PI * ax * ay * d * d);
+                return F0 + (max((float3)(1.0 - roughness), F0) - F0) * pow(saturate(1.0 - cosTheta), 5.0);
             }
 
-            // Direct lighting remapping: k = (r+1)² / 8  (Disney/UE4)
-            // IBL remapping k = r²/2 is intentionally NOT used here.
-            float GeometrySmithSchlickGGX(float NoV, float NoL, float roughness)
+            // Disney / Burley diffuse with retro-reflection (the missing piece in the original shader)
+            // FD90 = 0.5 + 2 r cos²θd ; result already divided by PI.
+            float3 DisneyDiffuse(float3 albedo, float roughness, float NoV, float NoL, float HoL)
             {
-                float r1 = roughness + 1.0;
-                float k  = max((r1 * r1) / 8.0, 0.0001);
-                float smithV = NoV * rcp(NoV * (1.0 - k) + k);
-                float smithL = NoL * rcp(NoL * (1.0 - k) + k);
-                return smithV * smithL;
+                float fd90         = 0.5 + 2.0 * roughness * HoL * HoL;
+                float lightScatter = 1.0 + (fd90 - 1.0) * pow(1.0 - NoL, 5.0);
+                float viewScatter  = 1.0 + (fd90 - 1.0) * pow(1.0 - NoV, 5.0);
+                return albedo * (lightScatter * viewScatter / PI);
             }
 
-            // sheenTint: scalar [0,1] blending between white and luminance-normalized color (Disney model)
-            float3 CalculateSheen(float3 color, float sheen, float sheenTint, float HoL)
+            // Anisotropic GGX NDF (Burley)
+            float D_GGXAnisotropic(float NoH, float ToH, float BoH, float ax, float ay)
+            {
+                float a2 = ax * ay;
+                float3 v = float3(ay * ToH, ax * BoH, a2 * NoH);
+                float v2 = dot(v, v);
+                float w2 = a2 / max(v2, 1e-7);
+                return a2 * w2 * w2 * (1.0 / PI);
+            }
+
+            // Anisotropic Smith joint visibility (Heitz). Already includes 1/(4 NoV NoL).
+            float V_SmithGGXAnisotropic(float NoV, float NoL,
+                                        float ToV, float BoV,
+                                        float ToL, float BoL,
+                                        float ax,  float ay)
+            {
+                float lambdaV = NoL * length(float3(ax * ToV, ay * BoV, NoV));
+                float lambdaL = NoV * length(float3(ax * ToL, ay * BoL, NoL));
+                return 0.5 / max(lambdaV + lambdaL, 1e-5);
+            }
+
+            // Disney sheen — uses sheenColor properly (was: only .r)
+            float3 DisneySheen(float3 albedo, float3 sheenColor, float sheen, float sheenTint, float HoL)
             {
                 if (sheen <= 0) return 0;
-                float luminance = dot(color, float3(0.3, 0.6, 0.1));
-                float3 tint = luminance > 0 ? color * rcp(luminance) : (float3)1;
-                float3 sheenColor = lerp((float3)1, tint, sheenTint); // sheenTint is scalar blend factor
-                return sheen * sheenColor * pow(saturate(1.0 - HoL), 5.0);
+                float lum     = dot(albedo, float3(0.3, 0.6, 0.1));
+                float3 cTint  = lum > 0 ? albedo * rcp(lum) : (float3)1;
+                float3 sCol   = lerp((float3)1, cTint, sheenTint) * sheenColor;
+                return sheen * sCol * pow(saturate(1.0 - HoL), 5.0);
             }
 
-            // GTR1 NDF + Smith GGX geometry for clearcoat (Disney model)
-            // NoL not needed — clearcoat geometry term uses fixed 0.25 roughness, not NoL.
-            float3 CalculateClearcoat(float clearcoat, float alpha, float NoH, float HoL, float NoV, float NoL)
+            // GTR1 NDF for Disney clearcoat
+            float D_GTR1(float NoH, float a)
+            {
+                if (a >= 1.0) return 1.0 / PI;
+                float a2 = a * a;
+                float t  = 1.0 + (a2 - 1.0) * NoH * NoH;
+                return (a2 - 1.0) / (PI * log(a2) * t);
+            }
+
+            // Smith G for clearcoat (fixed roughness 0.25)
+            float V_KelemenClearcoat(float NoV, float NoL)
+            {
+                const float ccRoughSq = 0.0625; // 0.25^2
+                float gv = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoV * NoV));
+                float gl = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoL * NoL));
+                return gv * gl;
+            }
+
+            // Returns clearcoat BRDF (no NoL/light radiance applied).
+            float ClearcoatBRDF(float clearcoat, float ccPerceptualRoughness,
+                                float NoH, float HoL, float NoV, float NoL)
             {
                 if (clearcoat <= 0) return 0;
-
-                // Remap smoothness [0,1] to GTR1 alpha [0.1, 0.001]
-                // After this remap alpha is always in (0.001, 0.1), never >= 1.
-                alpha = lerp(0.1, 0.001, alpha);
-                float alphaSq = alpha * alpha;
-
-                // GTR1 (Berry / Disney clearcoat NDF)
-                float d = (alphaSq - 1.0) * rcp(PI * log(alphaSq) * (1.0 + (alphaSq - 1.0) * NoH * NoH));
-
-                // Fresnel: clearcoat is always dielectric F0 = 0.04
-                float f = 0.04 + 0.96 * pow(saturate(1.0 - HoL), 5.0);
-
-                // Smith GGX geometry at fixed clearcoat roughness = 0.25
-                float ccRoughSq = 0.25 * 0.25;
-                float gl = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoV * NoV));
-                float gv = 2.0 * rcp(1.0 + sqrt(ccRoughSq + (1.0 - ccRoughSq) * NoL * NoL));
-                return (float3)(0.25 * clearcoat * d * f * gl * gv);
+                // Disney remap of perceptual roughness to GTR1 alpha range (0.001 .. 0.1).
+                float a = lerp(0.1, 0.001, 1.0 - ccPerceptualRoughness);
+                float D = D_GTR1(NoH, a);
+                float F = 0.04 + 0.96 * pow(saturate(1.0 - HoL), 5.0);
+                float G = V_KelemenClearcoat(NoV, NoL);
+                return 0.25 * clearcoat * D * F * G;
             }
 
-            // Returns Cook-Torrance specular for a single additional light.
-            // F0 and metallic are passed from the caller so they match the main-light path exactly.
-            float3 CalculateAdditionalLightsPBRSpecular(float3 N, float3 V, float3 L, float3 T,
-            float3 F0, float metallic, float3 albedo, float roughness)
+            // Lagarde specular occlusion approximation
+            float SpecularOcclusion(float NoV, float ao, float roughness)
             {
-                float3 H   = normalize(V + L);
-                float  NoL = saturate(dot(N, L));
-                float  NoV = max(dot(N, V), 0.0);
-                float  VoH = saturate(dot(V, H));
-
-                float  D = DistributionGGXAnisotropic(N, T, H, roughness);
-                float  G = GeometrySmithSchlickGGX(NoV, NoL, roughness);
-                float3 F = FresnelSchlick(VoH, F0);
-                return D * G * F * rcp(max(4.0 * NoV * NoL, 0.0001));
+                return saturate(pow(abs(NoV + ao), exp2(-16.0 * roughness - 1.0)) - 1.0 + ao);
             }
+
+            // Rotate tangent frame around N to expose anisotropic rotation control.
+            void RotateTangentFrame(inout float3 T, inout float3 B, float3 N, float angle01)
+            {
+                float a  = angle01 * 2.0 * PI;
+                float ca = cos(a);
+                float sa = sin(a);
+                float3 newT =  T * ca + B * sa;
+                float3 newB = -T * sa + B * ca;
+                T = newT;
+                B = newB;
+            }
+
+            // Single-step parallax UV offset using tangent-space view direction.
+            float2 ParallaxOffset(float2 uv, float3 viewDirTS, float scale)
+            {
+                float h = SAMPLE_TEXTURE2D(_HeightMap, sampler_HeightMap, uv).r;
+                float2 viewXY = viewDirTS.xy / max(viewDirTS.z, 0.1);
+                return uv + viewXY * (h - 0.5) * scale;
+            }
+
+            // ============================================================
+            //                       Surface init
+            // ============================================================
+
+            void InitInputData(Varyings IN, half3 normalTS, float3 normalWS, float3 viewDirWS, out InputData inputData)
+            {
+                inputData                  = (InputData)0;
+                inputData.positionWS       = IN.positionWS;
+                inputData.positionCS       = IN.positionCS;
+                inputData.normalWS         = normalWS;
+                inputData.viewDirectionWS  = viewDirWS;
+
+                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+                    inputData.shadowCoord = IN.shadowCoord;
+                #elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
+                    inputData.shadowCoord = TransformWorldToShadowCoord(inputData.positionWS);
+                #else
+                    inputData.shadowCoord = float4(0,0,0,0);
+                #endif
+
+                #ifdef _ADDITIONAL_LIGHTS_VERTEX
+                    inputData.vertexLighting = IN.vertexLighting.xyz;
+                #else
+                    inputData.vertexLighting = half3(0,0,0);
+                #endif
+
+                inputData.fogCoord                = InitializeInputDataFog(float4(IN.positionWS, 1.0), IN.fogFactor);
+                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionCS);
+            }
+
+            void InitBakedGI(Varyings IN, inout InputData inputData)
+            {
+                #if defined(DYNAMICLIGHTMAP_ON)
+                    inputData.bakedGI    = SAMPLE_GI(IN.staticLightmapUV, IN.dynamicLightmapUV, IN.vertexSH, inputData.normalWS);
+                    inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
+                #elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
+                    inputData.bakedGI    = SAMPLE_GI(IN.vertexSH,
+                                                     GetAbsolutePositionWS(inputData.positionWS),
+                                                     inputData.normalWS,
+                                                     inputData.viewDirectionWS,
+                                                     inputData.positionCS.xy,
+                                                     IN.probeOcclusion,
+                                                     inputData.shadowMask);
+                #else
+                    inputData.bakedGI    = SAMPLE_GI(IN.staticLightmapUV, IN.vertexSH, inputData.normalWS);
+                    inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
+                #endif
+            }
+
+            // SSAO sample. Returns (directAO, indirectAO).
+            float2 SampleSSAO(float2 screenUV)
+            {
+                #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(SHADERGRAPH_PREVIEW)
+                    float ssao = saturate(SampleAmbientOcclusion(screenUV) + (1.0 - _AmbientOcclusionParam.x));
+                    float directAO = lerp(1.0, ssao, _AmbientOcclusionParam.w);
+                    return float2(directAO, ssao);
+                #else
+                    return float2(1, 1);
+                #endif
+            }
+
+            // ============================================================
+            //                          Fragment
+            // ============================================================
 
             float4 frag(Varyings IN) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
 
-                float2 screenUV = GetNormalizedScreenSpaceUV(IN.positionCS);
-
-                // ---------- Baked GI Calculation (Irradiance + Shadow Mask) ----------
-                float3 bakedIrradiance = CalculateBakedIrradiance(IN, screenUV, _AmbientOcclusion);
-
+                float2 screenUV  = GetNormalizedScreenSpaceUV(IN.positionCS);
                 float3 viewDirWS = SafeNormalize(half3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w));
 
-                // Apply normal map to world-space normal used by all direct/IBL lighting.
-                // Without this, _UseNormalMap only affects CalculateBakedIrradiance, not specular/diffuse.
-                half3 normalTS   = _UseNormalMap > 0
-                ? UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, IN.uv))
-                : half3(0, 0, 1);
-                float3 normalWS  = _UseNormalMap > 0
-                ? normalize(TransformTangentToWorld(normalTS, half3x3(IN.tangentWS.xyz, IN.bitangentWS.xyz, IN.normalWS.xyz)))
-                : IN.normalWS.xyz;
+                // ---- Geometric TBN ----
+                float3 N0 = normalize(IN.normalWS.xyz);
+                float3 T0 = normalize(IN.tangentWS.xyz);
+                float3 B0 = normalize(IN.bitangentWS.xyz);
 
-                // Sample surface maps
-                float3 albedo    = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).rgb;
-                float  metallic  = _UseMetallicMap  > 0 ? SAMPLE_TEXTURE2D(_MetallicMap,  sampler_MetallicMap,  IN.uv).r * _Metallic  : _Metallic;
-                float  roughness = _UseRoughnessMap > 0 ? SAMPLE_TEXTURE2D(_RoughnessMap, sampler_RoughnessMap, IN.uv).r * _Roughness : _Roughness;
-                roughness = max(roughness, 0.045); // prevent degenerate specular at roughness = 0
+                // ---- Parallax UV ----
+                float2 uv = IN.uv;
+                #if defined(_USE_HEIGHT_MAP)
+                {
+                    float3x3 worldToTangent = float3x3(T0, B0, N0);
+                    float3 viewDirTS = mul(worldToTangent, viewDirWS);
+                    uv = ParallaxOffset(uv, viewDirTS, _HeightScale);
+                }
+                #endif
 
-                float nov = max(dot(normalWS, viewDirWS), 0.0);
+                // ---- Texture samples ----
+                float4 baseSample = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
+                float3 albedo     = _BaseColor.rgb * baseSample.rgb;
+                float  alpha      = _BaseColor.a   * baseSample.a;
 
-                // F0: dielectrics use _F0 (default 0.04), metals tint F0 with albedo
-                float3 F0 = lerp(float3(_F0, _F0, _F0), albedo, metallic);
+                float metallic = _Metallic;
+                #if defined(_USE_METALLIC_MAP)
+                    metallic *= SAMPLE_TEXTURE2D(_MetallicMap, sampler_MetallicMap, uv).r;
+                #endif
 
-                // Energy conservation: kS (reflected) + kD (diffuse) = 1
-                float3 kS = FresnelSchlickRoughness(nov, F0, roughness);
-                float3 kD = (1.0 - kS) * (1.0 - metallic);
+                // Disney/UE4 convention: UI value is perceptual roughness; α used by D/G is r².
+                float perceptualRoughness = _Roughness;
+                #if defined(_USE_ROUGHNESS_MAP)
+                    perceptualRoughness *= SAMPLE_TEXTURE2D(_RoughnessMap, sampler_RoughnessMap, uv).r;
+                #endif
+                perceptualRoughness = max(perceptualRoughness, 0.045);
+                float roughness = perceptualRoughness * perceptualRoughness;
 
-                // Split-sum BRDF via analytical LUT approximation
-                float2 brdf   = EnvBRDFApprox(roughness, nov);
-                float  envLOD = roughness * 6.0; // URP cubemaps support up to 6 mip levels
+                float ao = _AmbientOcclusion;
+                #if defined(_USE_AO_MAP)
+                    ao *= SAMPLE_TEXTURE2D(_AOMap, sampler_AOMap, uv).g;
+                #endif
 
-                float3 ibl = CalculateIBL(
-                normalWS, viewDirWS, IN.positionWS, screenUV,
-                albedo,   roughness,
-                kS,       kD,
-                brdf,     envLOD,
-                bakedIrradiance);
+                float anisotropy = _Anisotropy;
+                #if defined(_USE_ANISOTROPY_MAP)
+                    anisotropy *= SAMPLE_TEXTURE2D(_AnisotropyMap, sampler_AnisotropyMap, uv).r;
+                #endif
 
-                // ---------- PBR Main Lighting Calculation ----------
+                // ---- Normal map ----
+                half3 normalTS = half3(0,0,1);
+                #if defined(_USE_NORMAL_MAP)
+                    normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv));
+                #endif
+                float3 normalWS = normalize(TransformTangentToWorld(normalTS, float3x3(T0, B0, N0)));
+
+                // ---- Anisotropic tangent frame (rotated, then re-orthogonalized to perturbed normal) ----
+                float3 anisoT = T0;
+                float3 anisoB = B0;
+                if (anisotropy > 0)
+                    RotateTangentFrame(anisoT, anisoB, N0, _AnisotropicRotation);
+                anisoT = normalize(anisoT - normalWS * dot(normalWS, anisoT));
+                anisoB = normalize(cross(normalWS, anisoT));
+
+                // ---- Anisotropic α ----
+                float aspect = sqrt(1.0 - 0.9 * anisotropy);
+                float ax = max(0.001, roughness / aspect);
+                float ay = max(0.001, roughness * aspect);
+
+                float NoV = saturate(dot(normalWS, viewDirWS));
+
+                // ---- F0 ----
+                float3 F0 = lerp((float3)_F0, albedo, metallic);
+
+                // ---- InputData / GI ----
+                InputData inputData;
+                InitInputData(IN, normalTS, normalWS, viewDirWS, inputData);
+                InitBakedGI(IN, inputData);
+
+                float2 ssao      = SampleSSAO(screenUV);
+                float  indirectAO = min(ssao.y, ao);
+                float  directAO   = ssao.x;
+
+                // ============================================================
+                //                            IBL
+                // ============================================================
+                float3 kS_indirect = FresnelSchlickRoughness(NoV, F0, perceptualRoughness);
+                float3 kD_indirect = (1.0 - kS_indirect) * (1.0 - metallic);
+
+                float2 envBRDF = EnvBRDFApprox(perceptualRoughness, NoV);
+                float  envLOD  = PerceptualRoughnessToMipmapLevel(perceptualRoughness);
+
+                float3 reflectDir   = reflect(-viewDirWS, normalWS);
+                float3 iblSpec      = 0;
+                float3 iblDiff      = kD_indirect * albedo * inputData.bakedGI;
+                float3 iblClearcoat = 0;
+
+                #if defined(_USE_CUSTOM_CUBEMAP)
+                    float3 prefiltered     = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, reflectDir, envLOD).rgb;
+                    iblSpec                = prefiltered * (kS_indirect * envBRDF.x + envBRDF.y);
+                    // Approximate irradiance via max-mip sample (not a proper convolution).
+                    float3 irradianceCube  = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, normalWS, 6.0).rgb;
+                    iblDiff                = kD_indirect * albedo * irradianceCube;
+                #elif defined(_USE_REFLECTIVE_PROBE)
+                    float3 prefiltered = GlossyEnvironmentReflection(reflectDir, IN.positionWS, perceptualRoughness, 1.0, screenUV);
+                    iblSpec            = prefiltered * (kS_indirect * envBRDF.x + envBRDF.y);
+                #endif
+
+                // Lagarde specular occlusion + AO on diffuse irradiance
+                float specOcc = SpecularOcclusion(NoV, indirectAO, roughness);
+                iblSpec *= specOcc;
+                iblDiff *= indirectAO;
+
+                // IBL clearcoat (separate env sample at clearcoat roughness)
+                #if defined(_USE_CUSTOM_CUBEMAP) || defined(_USE_REFLECTIVE_PROBE)
+                    if (_ClearCoat > 0)
+                    {
+                        float ccPerceptual = max(_ClearCoatRoughness, 0.045);
+                        float ccLOD        = PerceptualRoughnessToMipmapLevel(ccPerceptual);
+                        float Fcc          = 0.04 + 0.96 * pow(saturate(1.0 - NoV), 5.0);
+                        float3 ccPref      = 0;
+                        #if defined(_USE_CUSTOM_CUBEMAP)
+                            ccPref = SAMPLE_TEXTURECUBE_LOD(_CustomCubemap, sampler_CustomCubemap, reflectDir, ccLOD).rgb;
+                        #else
+                            ccPref = GlossyEnvironmentReflection(reflectDir, IN.positionWS, ccPerceptual, 1.0, screenUV);
+                        #endif
+                        iblClearcoat = ccPref * Fcc * _ClearCoat * specOcc;
+                    }
+                #endif
+
+                float3 ibl = iblSpec + iblDiff + iblClearcoat;
+
+                // ============================================================
+                //                       Main Light (direct)
+                // ============================================================
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
-                Light mainLight = GetMainLight(shadowCoord);
-                float nol = max(dot(normalWS, mainLight.direction), 0.0);
-                float3 h   = normalize(viewDirWS + mainLight.direction);
-                float voh  = max(dot(viewDirWS, h), 0.0); // Fresnel for direct light uses V·H, not N·V
+                Light  mainLight   = GetMainLight(shadowCoord, IN.positionWS, inputData.shadowMask);
+                MixRealtimeAndBakedGI(mainLight, normalWS, inputData.bakedGI);
 
-                // Fresnel at V·H for direct lighting (N·V is for IBL only)
-                float3 fresnelSchlick = FresnelSchlick(voh, F0);
+                float3 mainLightContrib;
+                {
+                    float3 L = mainLight.direction;
+                    float3 H = normalize(viewDirWS + L);
 
-                float distribution = DistributionGGXAnisotropic(normalWS, IN.tangentWS.xyz, h, roughness);
-                float geometry     = GeometrySmithSchlickGGX(nov, nol, roughness);
+                    float NoL = saturate(dot(normalWS, L));
+                    float NoH = saturate(dot(normalWS, H));
+                    float HoL = saturate(dot(H, L));
+                    float VoH = saturate(dot(viewDirWS, H));
 
-                // Cook-Torrance: (D * G * F) / (4 * N·V * N·L)  ×  N·L  ×  lightColor  ×  shadow
-                // N·L in numerator and denominator do NOT fully cancel — numerator is irradiance foreshortening,
-                // denominator is the BRDF normalization. Omitting it causes a hard bright edge at the terminator.
-                // Cook-Torrance specular BRDF (no nol/color/shadow here — applied once in pbr below)
-                float3 specular = (distribution * geometry * fresnelSchlick) / max(4.0 * nov * nol, 0.001);
+                    float ToH = dot(anisoT, H);
+                    float BoH = dot(anisoB, H);
+                    float ToV = dot(anisoT, viewDirWS);
+                    float BoV = dot(anisoB, viewDirWS);
+                    float ToL = dot(anisoT, L);
+                    float BoL = dot(anisoB, L);
 
-                // Specular tint: scalar luminance of albedo blends white→tinted (Disney specularTint model)
-                float luminance = dot(_BaseColor.rgb, float3(0.3, 0.6, 0.1));
-                float3 albedoTint = luminance > 0 ? _BaseColor.rgb * rcp(luminance) : (float3)1;
-                specular *= _SpecularColor.rgb * lerp((float3)1, albedoTint, _SpecularIntensity);
+                    // Disney diffuse (energy-conserving via 1 - metallic)
+                    float3 diffuse = DisneyDiffuse(albedo, roughness, NoV, NoL, HoL) * (1.0 - metallic);
 
-                // Lambert diffuse with energy conservation
-                float3 diffuse = (1.0 - fresnelSchlick) * (1.0 - metallic) * albedo / PI;
+                    // Anisotropic GGX specular: D · V_smith · F  (V_smith already absorbs the 4 NoV NoL)
+                    float  D = D_GGXAnisotropic(NoH, ToH, BoH, ax, ay);
+                    float  V = V_SmithGGXAnisotropic(NoV, NoL, ToV, BoV, ToL, BoL, ax, ay);
+                    float3 F = FresnelSchlick(VoH, F0);
+                    float3 specular = D * V * F;
 
-                // Sheen: fabric retroreflection, _SheenColor.r used as scalar tint blend (Disney model)
-                float3 sheen = CalculateSheen(albedo, _Sheen, _SheenColor.r, dot(h, mainLight.direction));
-                diffuse += sheen;
+                    // Disney specularTint blend (white ↔ luminance-normalized albedo)
+                    float  lumA   = dot(_BaseColor.rgb, float3(0.3, 0.6, 0.1));
+                    float3 albTint = lumA > 0 ? _BaseColor.rgb * rcp(lumA) : (float3)1;
+                    specular *= _SpecularColor.rgb * lerp((float3)1, albTint, _SpecularTint);
 
-                // Apply nol × light color × shadow once to the combined (diffuse + specular)
-                float3 mainLightRadiance = (diffuse + specular) * nol * mainLight.shadowAttenuation * mainLight.color;
+                    float3 sheen = DisneySheen(albedo, _SheenColor.rgb, _Sheen, _SheenTint, HoL);
+                    float  cc    = ClearcoatBRDF(_ClearCoat, _ClearCoatRoughness, NoH, HoL, NoV, NoL);
 
-                float noh = max(dot(normalWS, h), 0.0);
-                float hol = max(dot(h, mainLight.direction), 0.0);
+                    float3 radiance = mainLight.color * mainLight.shadowAttenuation * NoL * directAO;
+                    mainLightContrib = (diffuse + specular + sheen + cc) * radiance;
+                }
 
-                float3 clearcoat = CalculateClearcoat(_ClearCoat, 1.0 - _ClearCoatRoughness, noh, hol, nov, nol);
-                mainLightRadiance += clearcoat * nol * mainLight.shadowAttenuation * mainLight.color;
+                // ============================================================
+                //                    Additional Lights (direct)
+                // ============================================================
+                float3 additionalContrib = 0;
 
-                // ---------- Additional Lights Radiance Calculation ----------
-                float3 additionalLightsRadiance = 0;
+                #if defined(_ADDITIONAL_LIGHTS) || defined(_CLUSTER_LIGHT_LOOP)
+                    uint pixelLightCount = GetAdditionalLightsCount();
 
-                // Shadow mask lives in lightmap UV space, not screen UV.
-                float4 shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
+                    LIGHT_LOOP_BEGIN(pixelLightCount)
+                        Light light = GetAdditionalLight(lightIndex, IN.positionWS, inputData.shadowMask);
+                        #if defined(_LIGHT_COOKIES)
+                            light.color *= SampleAdditionalLightCookie(lightIndex, IN.positionWS);
+                        #endif
 
-                uint pixelLightCount = GetAdditionalLightsCount();
+                        float3 L = light.direction;
+                        float3 H = normalize(viewDirWS + L);
 
-                #if USE_CLUSTER_LIGHT_LOOP
-                    InputData inputData = (InputData)0;
-                    inputData.normalizedScreenSpaceUV = screenUV;
-                    inputData.positionWS = IN.positionWS;
-                    inputData.normalWS   = normalWS;
+                        float NoL = saturate(dot(normalWS, L));
+                        float NoH = saturate(dot(normalWS, H));
+                        float HoL = saturate(dot(H, L));
+                        float VoH = saturate(dot(viewDirWS, H));
+
+                        float ToH = dot(anisoT, H);
+                        float BoH = dot(anisoB, H);
+                        float ToV = dot(anisoT, viewDirWS);
+                        float BoV = dot(anisoB, viewDirWS);
+                        float ToL = dot(anisoT, L);
+                        float BoL = dot(anisoB, L);
+
+                        float3 diffuse = DisneyDiffuse(albedo, roughness, NoV, NoL, HoL) * (1.0 - metallic);
+
+                        float  D = D_GGXAnisotropic(NoH, ToH, BoH, ax, ay);
+                        float  V = V_SmithGGXAnisotropic(NoV, NoL, ToV, BoV, ToL, BoL, ax, ay);
+                        float3 F = FresnelSchlick(VoH, F0);
+                        float3 specular = D * V * F;
+
+                        float3 sheen = DisneySheen(albedo, _SheenColor.rgb, _Sheen, _SheenTint, HoL);
+                        float  cc    = ClearcoatBRDF(_ClearCoat, _ClearCoatRoughness, NoH, HoL, NoV, NoL);
+
+                        float3 radiance = light.color * light.distanceAttenuation * light.shadowAttenuation * NoL;
+                        additionalContrib += (diffuse + specular + sheen + cc) * radiance;
+                    LIGHT_LOOP_END
                 #endif
 
-                LIGHT_LOOP_BEGIN(pixelLightCount)
-                #if !USE_CLUSTER_LIGHT_LOOP
-                    lightIndex = GetPerObjectLightIndex(lightIndex);
+                #if defined(_ADDITIONAL_LIGHTS_VERTEX)
+                    additionalContrib += inputData.vertexLighting * albedo * (1.0 - metallic) / PI;
                 #endif
 
-                // Pass shadowMask (baked), not the main-light shadowCoord.
-                Light light = GetAdditionalLight(lightIndex, IN.positionWS, shadowMask);
-
-                // Apply cookie before computing any contribution from this light.
-                #if defined(LIGHT_COOKIES)
-                    float3 cookieColor = SampleAdditionalLightCookie(lightIndex, IN.positionWS);
-                    light.color *= cookieColor;
+                // ---- Emission ----
+                float3 emission = 0;
+                #if defined(_ENABLE_EMISSION)
+                    emission = _EmissionColor.rgb;
                 #endif
 
-                float  addNoL  = saturate(dot(normalWS, light.direction));
-                float3 addH    = normalize(viewDirWS + light.direction);
-                float  addVoH  = saturate(dot(viewDirWS, addH));
+                float3 color = ibl + mainLightContrib + additionalContrib + emission;
 
-                // Per-light Fresnel (V·H, same convention as main light)
-                float3 addF    = FresnelSchlick(addVoH, F0);
+                color = MixFog(color, inputData.fogCoord);
+                return float4(color, alpha);
+            }
+            ENDHLSL
+        }
 
-                // Cook-Torrance specular for this light
-                float3 addSpec = CalculateAdditionalLightsPBRSpecular(
-                normalWS, viewDirWS, light.direction, IN.tangentWS.xyz,
-                F0, metallic, albedo, roughness);
+        // ─────────────────────────────────────────────────────────────
+        // ShadowCaster
+        // ─────────────────────────────────────────────────────────────
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
 
-                // Lambert diffuse with energy conservation (same formula as main light)
-                float3 addDiff = (1.0 - addF) * (1.0 - metallic) * albedo / PI;
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull Back
 
-                // Accumulate: (diffuse + specular) × N·L × light radiance
-                float3 lightRadiance = light.color * light.distanceAttenuation * light.shadowAttenuation;
-                additionalLightsRadiance += (addDiff + addSpec) * addNoL * lightRadiance;
-                LIGHT_LOOP_END
+            HLSLPROGRAM
+            #pragma vertex   ShadowVert
+            #pragma fragment ShadowFrag
+            #pragma multi_compile_instancing
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
-                return float4(ibl + mainLightRadiance + additionalLightsRadiance, 1);
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            float3 _LightDirection;
+            float3 _LightPosition;
+
+            struct ShadowAttributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+            struct ShadowVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            float4 GetShadowPositionHClip(ShadowAttributes input)
+            {
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 normalWS   = TransformObjectToWorldNormal(input.normalOS);
+
+                #if _CASTING_PUNCTUAL_LIGHT_SHADOW
+                    float3 lightDirectionWS = normalize(_LightPosition - positionWS);
+                #else
+                    float3 lightDirectionWS = _LightDirection;
+                #endif
+
+                float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+                #if UNITY_REVERSED_Z
+                    positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+                #else
+                    positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+                #endif
+                return positionCS;
+            }
+
+            ShadowVaryings ShadowVert(ShadowAttributes IN)
+            {
+                ShadowVaryings OUT;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+                OUT.positionCS = GetShadowPositionHClip(IN);
+                return OUT;
+            }
+
+            half4 ShadowFrag(ShadowVaryings IN) : SV_Target
+            {
+                UNITY_SETUP_INSTANCE_ID(IN);
+                return 0;
+            }
+            ENDHLSL
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // DepthOnly
+        // ─────────────────────────────────────────────────────────────
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+
+            ZWrite On
+            ColorMask R
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex   DepthVert
+            #pragma fragment DepthFrag
+            #pragma multi_compile_instancing
+
+            struct DepthAttributes
+            {
+                float4 positionOS : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+            struct DepthVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            DepthVaryings DepthVert(DepthAttributes IN)
+            {
+                DepthVaryings OUT;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                return OUT;
+            }
+
+            half4 DepthFrag(DepthVaryings IN) : SV_Target
+            {
+                UNITY_SETUP_INSTANCE_ID(IN);
+                return 0;
+            }
+            ENDHLSL
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // DepthNormals (for SSAO / depth-normal prepass)
+        // ─────────────────────────────────────────────────────────────
+        Pass
+        {
+            Name "DepthNormals"
+            Tags { "LightMode" = "DepthNormals" }
+
+            ZWrite On
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex   DepthNormalsVert
+            #pragma fragment DepthNormalsFrag
+            #pragma multi_compile_instancing
+
+            struct DNAttributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                float4 tangentOS  : TANGENT;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+            struct DNVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS   : TEXCOORD0;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            DNVaryings DepthNormalsVert(DNAttributes IN)
+            {
+                DNVaryings OUT;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+                VertexPositionInputs vIn = GetVertexPositionInputs(IN.positionOS.xyz);
+                VertexNormalInputs   nIn = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
+                OUT.positionCS = vIn.positionCS;
+                OUT.normalWS   = nIn.normalWS;
+                return OUT;
+            }
+
+            half4 DepthNormalsFrag(DNVaryings IN) : SV_Target
+            {
+                UNITY_SETUP_INSTANCE_ID(IN);
+                return half4(NormalizeNormalPerPixel(IN.normalWS), 0.0);
+            }
+            ENDHLSL
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // Meta (lightmap baking)
+        // ─────────────────────────────────────────────────────────────
+        Pass
+        {
+            Name "Meta"
+            Tags { "LightMode" = "Meta" }
+
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex   MetaVert
+            #pragma fragment MetaFrag
+            #pragma shader_feature_local _ENABLE_EMISSION
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/MetaInput.hlsl"
+
+            struct MetaAttributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                float2 uv0        : TEXCOORD0;
+                float2 uv1        : TEXCOORD1;
+                float2 uv2        : TEXCOORD2;
+            };
+            struct MetaVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                float2 uv         : TEXCOORD0;
+            };
+
+            MetaVaryings MetaVert(MetaAttributes IN)
+            {
+                MetaVaryings OUT;
+                OUT.positionCS = UnityMetaVertexPosition(IN.positionOS.xyz, IN.uv1, IN.uv2, unity_LightmapST, unity_DynamicLightmapST);
+                OUT.uv         = TRANSFORM_TEX(IN.uv0, _MainTex) * _TextureTiling.xy;
+                return OUT;
+            }
+
+            half4 MetaFrag(MetaVaryings IN) : SV_Target
+            {
+                MetaInput meta = (MetaInput)0;
+                meta.Albedo    = _BaseColor.rgb * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).rgb;
+                #if defined(_ENABLE_EMISSION)
+                    meta.Emission = _EmissionColor.rgb;
+                #else
+                    meta.Emission = 0;
+                #endif
+                return UnityMetaFragment(meta);
             }
             ENDHLSL
         }
     }
+
+    FallBack "Hidden/Universal Render Pipeline/FallbackError"
 }
