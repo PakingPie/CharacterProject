@@ -7,28 +7,28 @@ Shader "Custom/FabricPBR_TextureBased"
         _BaseColor("Base Color", Color) = (1,1,1,1)
 
         [Header(Normal Map)]
-        [Toggle(Use Normal Map)] _UseNormalMap("Use Normal Map", Float) = 0
+        [Toggle] _UseNormalMap("Use Normal Map", Float) = 0
         _NormalMap("Normal Map", 2D) = "bump" {}
         _NormalStrength("Normal Strength", Range(0, 10)) = 1.0
 
         [Header(Metallic)]
         _Metallic("Metallic", Range(0,1)) = 0.0
-        [Toggle(Use Metallic Map)] _UseMetallicMap("Use Metallic Map", Float) = 0
+        [Toggle] _UseMetallicMap("Use Metallic Map", Float) = 0
         _MetallicMap("Metallic Map", 2D) = "white" {}
 
         [Header(Roughness)]
         _Roughness("Roughness", Range(0,1)) = 0.5
-        [Toggle(Use Roughness Map)] _UseRoughnessMap("Use Roughness Map", Float) = 0
+        [Toggle] _UseRoughnessMap("Use Roughness Map", Float) = 0
         _RoughnessMap("Roughness Map", 2D) = "white" {}
 
         [Header(Ambient Occlusion)]
         _AmbientOcclusion("Ambient Occlusion", Range(0,1)) = 1.0
-        [Toggle(Use AO Map)] _UseAOMap("Use AO Map", Float) = 0
+        [Toggle] _UseAOMap("Use AO Map", Float) = 0
         _AOMap("AO Map", 2D) = "white" {}
 
         [Header(Anisotropy)]
         _Anisotropy("Anisotropy", Range(-1,1)) = 0.5
-        [Toggle(Use Anisotropy Map)] _UseAnisotropyMap("Use Anisotropy Map", Float) = 0
+        [Toggle] _UseAnisotropyMap("Use Anisotropy Map", Float) = 0
         _AnisotropyMap("Anisotropy Map", 2D) = "white" {}
 
         [Header(Specular)]
@@ -37,16 +37,16 @@ Shader "Custom/FabricPBR_TextureBased"
 
         [Header(Emission)]
         _EmissionColor("Emission Color", Color) = (0,0,0,1)
-        [Toggle(Enable Emission)] _EnableEmission("Enable Emission", Float) = 0
+        [Toggle] _EnableEmission("Enable Emission", Float) = 0
 
         [Header(Height Map)]
-        [Toggle(Use Height Map)] _UseHeightMap("Use Height Map", Float) = 0
+        [Toggle] _UseHeightMap("Use Height Map", Float) = 0
         _HeightMap("Height Map", 2D) = "black" {}
         _HeightScale("Height Scale", Range(0, 0.1)) = 0.02
 
         [Header(Fabric Micro BRDF)]
         _FabricSpecAttenuation("GGX Attenuation (0=fabric  1=nylon-like)", Range(0,1)) = 0.8
-        _FabricMicroNDFStrength("Yarn-Loop Normal Tilt Strength", Range(0,1)) = 0.2
+        _FabricMicroNDFStrength("Spec AA Strength (texture normal variance)", Range(0,2)) = 1.0
 
         [Header(Sheen  (velvet  felt  not nylon))]
         _Sheen("Sheen Intensity", Range(0,1)) = 0.0
@@ -68,12 +68,6 @@ Shader "Custom/FabricPBR_TextureBased"
         _FuzzColor("Fuzz Color", Color) = (0.5, 0.5, 0.5, 1)
         _FuzzPower("Fuzz Power", Range(1, 8)) = 3.0
 
-        [Header(Stretch Transparency)]
-        _StretchTransparency("Stretch to Transparency", Range(0, 2)) = 0.5
-        _StretchOpeningGrow("Stretch to Opening Grow", Range(0, 3)) = 1.5
-        _StretchReference("Rest-State World per UV", Float) = 0.01
-        [Toggle] _UseStretchFromVertexG("Override: Vertex Green = Stretch", Float) = 0
-
         [Header(Two Layer Silhouette)]
         _TwoLayerDarkening("Edge Layer Darkening", Range(0, 1)) = 0.4
         _TwoLayerPower("Edge Power", Range(1, 8)) = 3.0
@@ -91,7 +85,7 @@ Shader "Custom/FabricPBR_TextureBased"
         _StripSpecIntensity("Strip Intensity", Range(0, 3)) = 0.3
         _StripSpecRoughness("Strip Roughness", Range(0.01, 1)) = 0.5
         _StripSpecAnisotropy("Strip Anisotropy", Range(0, 1)) = 0.4
-        _StripSpecWidth("Strip Width (cross-fiber)", Range(0.01, 1)) = 0.3
+        _StripSpecWidth("Strip Width (cross-fiber)", Range(0.01, 0.6)) = 0.15
 
         [Header(Clearcoat)]
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
@@ -101,9 +95,9 @@ Shader "Custom/FabricPBR_TextureBased"
         _Opacity("Base Opacity", Range(0, 1)) = 1.0
         _ShadowDensity("Shadow Density", Range(0, 2)) = 1.0
         [Toggle] _ForwardZWrite("Forward Depth Write (Transparent)", Float) = 0
-        [Toggle(Use Opacity Map)] _UseOpacityMap("Use Opacity Map", Float) = 0
+        [Toggle] _UseOpacityMap("Use Opacity Map", Float) = 0
         _OpacityMap("Opacity Map (R = opaque)", 2D) = "white" {}
-        [Toggle(Use Vertex Alpha)] _UseVertexAlpha("Use Vertex Color Alpha", Float) = 0
+        [Toggle] _UseVertexAlpha("Use Vertex Color Alpha", Float) = 0
         _FresnelOpacityPower("Edge Opacity Power", Range(1, 8)) = 3.0
         _FresnelOpacityStrength("Edge Opacity Boost", Range(0, 1)) = 0.0
         _SeeThruTint("See-Through Fabric Tint", Range(0, 1)) = 0.3
@@ -118,8 +112,8 @@ Shader "Custom/FabricPBR_TextureBased"
         _TextureTiling("Texture Tiling", Vector) = (1,1,0,0)
 
         [Header(Reflection)]
-        [Toggle(Use Reflective Probe)] _UseReflectiveProbe("Use Reflective Probe", Float) = 0
-        [Toggle(Use Custom Cubemap)] _UseCustomCubemap("Use Custom Cubemap", Float) = 0
+        [Toggle] _UseReflectiveProbe("Use Reflective Probe", Float) = 0
+        [Toggle] _UseCustomCubemap("Use Custom Cubemap", Float) = 0
         _CustomCubemap("Custom Cubemap", Cube) = "" {}
     }
 
@@ -350,38 +344,25 @@ Shader "Custom/FabricPBR_TextureBased"
                 }
 
                 // ════════════════════════════════════════════
-                // Fabric Micro-BRDF  (mirrors ProceduralPattern)
+                // Fabric Micro-BRDF  (texture-based)
+                // ────────────────────────────────────────────
+                // 1. Spec attenuation (0 = fabric, 1 = nylon-like).
+                // 2. Specular AA: derive bump variance from the screen-space
+                //    derivatives of the *texture* normal map and fold it into
+                //    roughness² for GGX, Strip and Clearcoat. This is the
+                //    physically grounded analogue of the procedural shader's
+                //    yarn-loop NDF broadening — it suppresses moire/sparkle
+                //    on high-frequency Substance normals while preserving the
+                //    soft anisotropic highlights nylon stockings need.
+                //    No screen-locked stochastic jitter (would dot-sparkle).
                 // ════════════════════════════════════════════
-                // ── 1. Specular attenuation ──────────────────
                 float fabricSpecAtten = lerp(0.15, 1.0, _FabricSpecAttenuation);
                 float fabricCCAtten   = lerp(0.25, 1.0, _FabricSpecAttenuation);
 
-                // ── 2. Yarn-loop micro-NDF ────────────────────
-                // Mip filtering corrects colour/normal at distance but the
-                // BRDF still receives the macro surface normal → vertical
-                // GGX stripe on any cylinder. Fix: per-pixel stochastic
-                // tilt whose magnitude grows with UV pixel footprint,
-                // mirroring the cellsPerPx logic in the procedural shader.
-                {
-                    float2 uvDx = ddx(uv);
-                    float2 uvDy = ddy(uv);
-                    float  texelsPerPx = max(length(float2(uvDx.x, uvDy.x)),
-                                             length(float2(uvDx.y, uvDy.y))) * 512.0;
-
-                    float  yarnStochFade = smoothstep(0.05, 0.4, texelsPerPx)
-                                           * _FabricMicroNDFStrength;
-                    float  yarnAngle = InterleavedGradientNoise(IN.positionCS.xy + 17.3)
-                                       * 6.2831853;
-                    float  yarnTilt  = yarnStochFade * texelsPerPx * 0.3;
-                    normalTS.x += cos(yarnAngle) * yarnTilt;
-                    normalTS.y += sin(yarnAngle) * yarnTilt;
-                    normalTS = normalize(normalTS);
-
-                    // Roughness elevation: broadens lobe as yarn loops go
-                    // sub-pixel — analytic equivalent of mip-level blurring.
-                    roughness = saturate(roughness + texelsPerPx
-                                         * 0.35 * _FabricMicroNDFStrength);
-                }
+                float2 nDx = ddx(normalTS.xy);
+                float2 nDy = ddy(normalTS.xy);
+                float  bumpVariance = max(dot(nDx, nDx), dot(nDy, nDy))
+                                    * _FabricMicroNDFStrength;
 
                 half3x3 tbnMatrix = half3x3(
                 IN.tangentWS.xyz,
@@ -391,10 +372,18 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 normalWS = normalize(
                 TransformTangentToWorld(normalTS, tbnMatrix));
 
+                // Geometric (pre-bump) normalWS for clearcoat — nylon polymer
+                // bridges across thread bumps (matches ProceduralPattern).
+                float3 geomNormalWS = normalize(IN.normalWS.xyz);
+
                 float3 tangentWS = normalize(IN.tangentWS.xyz
                 - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
-                float nov = max(dot(normalWS, viewDirWS), 0.0001);
+                float nov  = max(dot(normalWS,     viewDirWS), 0.0001);
+                float novG = max(dot(geomNormalWS, viewDirWS), 0.0001);
+
+                // Broaden GGX roughness with bump variance (Specular AA).
+                roughness = sqrt(roughness * roughness + bumpVariance);
 
                 // ── Strip-specular tangent frame ─────────
                 float3 bitangentWS_strip = cross(normalWS, tangentWS);
@@ -403,6 +392,17 @@ Shader "Custom/FabricPBR_TextureBased"
                   + bitangentWS_strip * _StripSpecDirection.y
                   + normalWS * _StripSpecDirection.z);
                 float3 stripBitangentWS = normalize(cross(normalWS, stripTangentWS));
+
+                // Pre-broadened strip roughness (cross-fiber width is floored
+                // by _StripSpecWidth so high anisotropy can't collapse it).
+                float stripRoughT_base = _StripSpecRoughness * (1.0 + _StripSpecAnisotropy);
+                float stripRoughB_base = max(_StripSpecRoughness * (1.0 - _StripSpecAnisotropy),
+                                             _StripSpecWidth);
+                float stripRoughT = sqrt(stripRoughT_base * stripRoughT_base + bumpVariance);
+                float stripRoughB = sqrt(stripRoughB_base * stripRoughB_base + bumpVariance);
+
+                // Pre-broadened clearcoat roughness.
+                float ccRoughAA = sqrt(_ClearCoatRoughness * _ClearCoatRoughness + bumpVariance);
 
                 // ══════════════════════════════════════════
                 // Opacity pipeline
@@ -572,12 +572,9 @@ Shader "Custom/FabricPBR_TextureBased"
                 specular *= fabricSpecAtten;
 
                 // ── Strip specular (Ward BRDF + Fresnel) ────────
-                // roughnessT: along-fiber spread (controlled by roughness + anisotropy)
-                // roughnessB: cross-fiber width (floored by _StripSpecWidth to
-                //             prevent collapse at high anisotropy)
-                float stripRoughT = _StripSpecRoughness * (1.0 + _StripSpecAnisotropy);
-                float stripRoughB = max(_StripSpecRoughness * (1.0 - _StripSpecAnisotropy),
-                                        _StripSpecWidth);
+                // stripRoughT/stripRoughB pre-broadened with bump variance
+                // (computed once above) — keeps highlight stable under the
+                // high-frequency Substance normal map.
                 float  D_strip = WardSpecularSplit(
                     h, stripTangentWS, stripBitangentWS, normalWS,
                     stripRoughT, stripRoughB);
@@ -591,9 +588,12 @@ Shader "Custom/FabricPBR_TextureBased"
                 _SheenColor.rgb, _Sheen, _SheenRoughness,
                 noh, nov, nol);
 
+                // Clearcoat uses geometric normal (polymer film bridges bumps).
+                float  nohG = max(dot(geomNormalWS, h), 0.0);
+                float  nolG = saturate(dot(geomNormalWS, mainLight.direction));
                 float3 clearcoat = EvaluateClearcoat(
-                _ClearCoat, 1.0 - _ClearCoatRoughness,
-                noh, hol, nov, nol);
+                _ClearCoat, 1.0 - ccRoughAA,
+                nohG, hol, novG, nolG);
                 clearcoat *= fabricCCAtten;
 
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
@@ -658,9 +658,11 @@ Shader "Custom/FabricPBR_TextureBased"
                 _SheenColor.rgb, _Sheen, _SheenRoughness,
                 aNoH, nov, aNoL);
 
+                float aNoHG = max(dot(geomNormalWS, aH), 0.0);
+                float aNoLG = saturate(dot(geomNormalWS, light.direction));
                 float3 aCC = EvaluateClearcoat(
-                _ClearCoat, 1.0 - _ClearCoatRoughness,
-                aNoH, aHoL, nov, aNoL);
+                _ClearCoat, 1.0 - ccRoughAA,
+                aNoHG, aHoL, novG, aNoLG);
                 aCC *= fabricCCAtten;
 
                 float3 lightRad = light.color

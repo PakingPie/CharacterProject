@@ -2,8 +2,18 @@ Shader "Custom/BasePBR"
 {
     Properties
     {
+        [Header(Surface Options)]
+        [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend("Src Blend", Float) = 1
+        [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend("Dst Blend", Float) = 0
+        [Enum(Off, 0, On, 1)] _ZWrite("ZWrite", Float) = 1
+        [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull", Float) = 2
+        [Toggle(_SURFACE_TYPE_TRANSPARENT)] _SurfaceTypeTransparent("Transparent Surface", Float) = 0
+        [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha Clip", Float) = 0
+        _Cutoff("Alpha Cutoff", Range(0,1)) = 0.5
+        [Toggle(_ALPHAPREMULTIPLY_ON)] _AlphaPremultiply("Premultiply Alpha", Float) = 0
+
         [Header(Main Color)]
-        _MainTex("Albedo (RGB)", 2D) = "white" {}
+        _MainTex("Albedo RGB", 2D) = "white" {}
         _BaseColor("Base Color", Color) = (1,1,1,1)
 
         [Header(Normal Map)]
@@ -16,14 +26,14 @@ Shader "Custom/BasePBR"
         _MetallicMap("Metallic Map", 2D) = "white" {}
 
         [Header(Roughness)]
-        _Roughness("Roughness (perceptual)", Range(0,1)) = 0.5
+        _Roughness("Roughness", Range(0,1)) = 0.5
         [Toggle(_USE_ROUGHNESS_MAP)] _UseRoughnessMap("Use Roughness Map", Float) = 0
         _RoughnessMap("Roughness Map", 2D) = "white" {}
 
         [Header(Ambient Occlusion)]
         _AmbientOcclusion("Ambient Occlusion", Range(0,1)) = 1.0
         [Toggle(_USE_AO_MAP)] _UseAOMap("Use AO Map", Float) = 0
-        _AOMap("AO Map (G channel)", 2D) = "white" {}
+        _AOMap("AO Map G Channel", 2D) = "white" {}
 
         [Header(Anisotropy)]
         _Anisotropy("Anisotropy", Range(0,1)) = 0.0
@@ -33,24 +43,24 @@ Shader "Custom/BasePBR"
 
         [Header(Specular Tint)]
         _SpecularColor("Specular Color", Color) = (1,1,1,1)
-        _SpecularTint("Specular Tint (Disney)", Range(0,1)) = 0.0
+        _SpecularTint("Specular Tint", Range(0,1)) = 0.0
 
         [Header(Emission)]
         _EmissionColor("Emission Color", Color) = (0,0,0,1)
         [Toggle(_ENABLE_EMISSION)] _EnableEmission("Enable Emission", Float) = 0
 
-        [Header(Height Map / Parallax)]
+        [Header(Height Map Parallax)]
         [Toggle(_USE_HEIGHT_MAP)] _UseHeightMap("Use Height Map", Float) = 0
-        _HeightMap("Height Map (R)", 2D) = "black" {}
+        _HeightMap("Height Map R", 2D) = "black" {}
         _HeightScale("Height Scale", Range(0, 0.1)) = 0.02
 
         [Header(Advanced Options)]
         _F0("Dielectric F0", Range(0,1)) = 0.04
         _ClearCoat("Clear Coat", Range(0,1)) = 0.0
-        _ClearCoatRoughness("Clear Coat Roughness (perceptual)", Range(0,1)) = 0.5
+        _ClearCoatRoughness("Clear Coat Roughness", Range(0,1)) = 0.5
         _Sheen("Sheen", Range(0,1)) = 0.0
         _SheenColor("Sheen Color", Color) = (1,1,1,1)
-        _SheenTint("Sheen Tint (Disney)", Range(0,1)) = 0.5
+        _SheenTint("Sheen Tint", Range(0,1)) = 0.5
         _TextureTiling("Texture Tiling", Vector) = (1,1,0,0)
 
         [Header(Reflection)]
@@ -88,6 +98,13 @@ Shader "Custom/BasePBR"
                 float4 _MainTex_ST;
                 float  _HeightScale;
 
+                // Surface / blend
+                float  _Cutoff;
+                float  _SrcBlend;
+                float  _DstBlend;
+                float  _ZWrite;
+                float  _Cull;
+
                 // Toggles kept in CBUFFER for SRP-batcher compatibility.
                 float  _UseReflectiveProbe;
                 float  _UseCustomCubemap;
@@ -117,9 +134,10 @@ Shader "Custom/BasePBR"
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
 
-            Cull Back
-            ZWrite On
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
             ZTest LEqual
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex vert
@@ -135,6 +153,9 @@ Shader "Custom/BasePBR"
             #pragma shader_feature_local _USE_REFLECTIVE_PROBE
             #pragma shader_feature_local _USE_CUSTOM_CUBEMAP
             #pragma shader_feature_local _ENABLE_EMISSION
+            #pragma shader_feature_local _SURFACE_TYPE_TRANSPARENT
+            #pragma shader_feature_local _ALPHATEST_ON
+            #pragma shader_feature_local _ALPHAPREMULTIPLY_ON
 
             // URP forward keywords
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
@@ -459,6 +480,10 @@ Shader "Custom/BasePBR"
                 float3 albedo     = _BaseColor.rgb * baseSample.rgb;
                 float  alpha      = _BaseColor.a   * baseSample.a;
 
+                #if defined(_ALPHATEST_ON)
+                    clip(alpha - _Cutoff);
+                #endif
+
                 float metallic = _Metallic;
                 #if defined(_USE_METALLIC_MAP)
                     metallic *= SAMPLE_TEXTURE2D(_MetallicMap, sampler_MetallicMap, uv).r;
@@ -667,6 +692,15 @@ Shader "Custom/BasePBR"
                 float3 color = ibl + mainLightContrib + additionalContrib + emission;
 
                 color = MixFog(color, inputData.fogCoord);
+
+                #if defined(_SURFACE_TYPE_TRANSPARENT) && defined(_ALPHAPREMULTIPLY_ON)
+                    color.rgb *= alpha;
+                #endif
+
+                #if !defined(_SURFACE_TYPE_TRANSPARENT)
+                    alpha = 1.0;
+                #endif
+
                 return float4(color, alpha);
             }
             ENDHLSL
@@ -683,13 +717,14 @@ Shader "Custom/BasePBR"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull Back
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex   ShadowVert
             #pragma fragment ShadowFrag
             #pragma multi_compile_instancing
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #pragma shader_feature_local _ALPHATEST_ON
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
@@ -700,11 +735,13 @@ Shader "Custom/BasePBR"
             {
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
+                float2 texcoord   : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
             struct ShadowVaryings
             {
                 float4 positionCS : SV_POSITION;
+                float2 uv         : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -734,12 +771,17 @@ Shader "Custom/BasePBR"
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
                 OUT.positionCS = GetShadowPositionHClip(IN);
+                OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
                 return OUT;
             }
 
             half4 ShadowFrag(ShadowVaryings IN) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
+                #if defined(_ALPHATEST_ON)
+                    float alpha = _BaseColor.a * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).a;
+                    clip(alpha - _Cutoff);
+                #endif
                 return 0;
             }
             ENDHLSL
@@ -755,21 +797,24 @@ Shader "Custom/BasePBR"
 
             ZWrite On
             ColorMask R
-            Cull Back
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex   DepthVert
             #pragma fragment DepthFrag
             #pragma multi_compile_instancing
+            #pragma shader_feature_local _ALPHATEST_ON
 
             struct DepthAttributes
             {
                 float4 positionOS : POSITION;
+                float2 texcoord   : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
             struct DepthVaryings
             {
                 float4 positionCS : SV_POSITION;
+                float2 uv         : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -779,12 +824,17 @@ Shader "Custom/BasePBR"
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
                 return OUT;
             }
 
             half4 DepthFrag(DepthVaryings IN) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
+                #if defined(_ALPHATEST_ON)
+                    float alpha = _BaseColor.a * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).a;
+                    clip(alpha - _Cutoff);
+                #endif
                 return 0;
             }
             ENDHLSL
@@ -799,24 +849,27 @@ Shader "Custom/BasePBR"
             Tags { "LightMode" = "DepthNormals" }
 
             ZWrite On
-            Cull Back
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex   DepthNormalsVert
             #pragma fragment DepthNormalsFrag
             #pragma multi_compile_instancing
+            #pragma shader_feature_local _ALPHATEST_ON
 
             struct DNAttributes
             {
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float4 tangentOS  : TANGENT;
+                float2 texcoord   : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
             struct DNVaryings
             {
                 float4 positionCS : SV_POSITION;
                 float3 normalWS   : TEXCOORD0;
+                float2 uv         : TEXCOORD1;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -829,12 +882,17 @@ Shader "Custom/BasePBR"
                 VertexNormalInputs   nIn = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
                 OUT.positionCS = vIn.positionCS;
                 OUT.normalWS   = nIn.normalWS;
+                OUT.uv         = TRANSFORM_TEX(IN.texcoord, _MainTex) * _TextureTiling.xy;
                 return OUT;
             }
 
             half4 DepthNormalsFrag(DNVaryings IN) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
+                #if defined(_ALPHATEST_ON)
+                    float alpha = _BaseColor.a * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv).a;
+                    clip(alpha - _Cutoff);
+                #endif
                 return half4(NormalizeNormalPerPixel(IN.normalWS), 0.0);
             }
             ENDHLSL
