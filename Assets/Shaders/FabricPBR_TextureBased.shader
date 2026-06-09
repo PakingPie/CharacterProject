@@ -379,6 +379,12 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 tangentWS = normalize(IN.tangentWS.xyz
                 - normalWS * dot(normalWS, IN.tangentWS.xyz));
 
+                // Geometric tangent (un-bumped) — anchors the strip lobe to
+                // the macro fiber direction so it doesn't shatter into
+                // salt-and-pepper sparkle from per-yarn normal detail.
+                float3 geomTangentWS = normalize(IN.tangentWS.xyz
+                - geomNormalWS * dot(geomNormalWS, IN.tangentWS.xyz));
+
                 float nov  = max(dot(normalWS,     viewDirWS), 0.0001);
                 float novG = max(dot(geomNormalWS, viewDirWS), 0.0001);
 
@@ -386,12 +392,16 @@ Shader "Custom/FabricPBR_TextureBased"
                 roughness = sqrt(roughness * roughness + bumpVariance);
 
                 // ── Strip-specular tangent frame ─────────
-                float3 bitangentWS_strip = cross(normalWS, tangentWS);
+                // Built on the GEOMETRIC normal, not the bumped normal: the
+                // long along-fiber sheen of a stocking is a macro reflection
+                // off the cylinder × fiber direction. Per-yarn micro-normals
+                // belong only to the GGX body lobe.
+                float3 bitangentWS_strip = cross(geomNormalWS, geomTangentWS);
                 float3 stripTangentWS = normalize(
-                    tangentWS * _StripSpecDirection.x
+                    geomTangentWS * _StripSpecDirection.x
                   + bitangentWS_strip * _StripSpecDirection.y
-                  + normalWS * _StripSpecDirection.z);
-                float3 stripBitangentWS = normalize(cross(normalWS, stripTangentWS));
+                  + geomNormalWS * _StripSpecDirection.z);
+                float3 stripBitangentWS = normalize(cross(geomNormalWS, stripTangentWS));
 
                 // Pre-broadened strip roughness (cross-fiber width is floored
                 // by _StripSpecWidth so high anisotropy can't collapse it).
@@ -571,12 +581,16 @@ Shader "Custom/FabricPBR_TextureBased"
 
                 specular *= fabricSpecAtten;
 
+                // Geometric (un-bumped) NdotH / NdotL for macro lobes.
+                float  nohG = max(dot(geomNormalWS, h), 0.0);
+                float  nolG = saturate(dot(geomNormalWS, mainLight.direction));
+
                 // ── Strip specular (Ward BRDF + Fresnel) ────────
-                // stripRoughT/stripRoughB pre-broadened with bump variance
-                // (computed once above) — keeps highlight stable under the
-                // high-frequency Substance normal map.
+                // Anchored to the geometric frame: prevents per-yarn normal
+                // detail from shattering the long along-fiber sheen into
+                // salt-and-pepper sparkle at close distances.
                 float  D_strip = WardSpecularSplit(
-                    h, stripTangentWS, stripBitangentWS, normalWS,
+                    h, stripTangentWS, stripBitangentWS, geomNormalWS,
                     stripRoughT, stripRoughB);
                 float3 stripTerm = D_strip * F_direct
                     * _StripSpecIntensity * fabricSpecAtten;
@@ -589,8 +603,6 @@ Shader "Custom/FabricPBR_TextureBased"
                 noh, nov, nol);
 
                 // Clearcoat uses geometric normal (polymer film bridges bumps).
-                float  nohG = max(dot(geomNormalWS, h), 0.0);
-                float  nolG = saturate(dot(geomNormalWS, mainLight.direction));
                 float3 clearcoat = EvaluateClearcoat(
                 _ClearCoat, 1.0 - ccRoughAA,
                 nohG, hol, novG, nolG);
@@ -599,7 +611,10 @@ Shader "Custom/FabricPBR_TextureBased"
                 float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation;
 
                 float3 mainBodyLighting = diffuse * nolWrap * mainRadiance;
-                float3 mainReflectLighting = (specular + sheen + clearcoat + stripTerm) * nol * mainRadiance;
+                // GGX body uses bumped nol; strip + clearcoat use geometric nolG.
+                float3 mainReflectLighting = ((specular + sheen) * nol
+                                            + (stripTerm + clearcoat) * nolG)
+                                            * mainRadiance;
 
                 mainBodyLighting += EvaluateTransmission(
                 normalWS, viewDirWS, mainLight.direction,
@@ -645,8 +660,12 @@ Shader "Custom/FabricPBR_TextureBased"
                 tangentWS, F0, roughness, anisotropy);
                 aSpec *= fabricSpecAtten;
 
+                float aNoHG = max(dot(geomNormalWS, aH), 0.0);
+                float aNoLG = saturate(dot(geomNormalWS, light.direction));
+
+                // Strip uses geometric normal (macro fiber reflection).
                 float  aD_strip = WardSpecularSplit(
-                    aH, stripTangentWS, stripBitangentWS, normalWS,
+                    aH, stripTangentWS, stripBitangentWS, geomNormalWS,
                     stripRoughT, stripRoughB);
                 float3 aStripTerm = aD_strip * aF
                     * _StripSpecIntensity * fabricSpecAtten;
@@ -658,8 +677,6 @@ Shader "Custom/FabricPBR_TextureBased"
                 _SheenColor.rgb, _Sheen, _SheenRoughness,
                 aNoH, nov, aNoL);
 
-                float aNoHG = max(dot(geomNormalWS, aH), 0.0);
-                float aNoLG = saturate(dot(geomNormalWS, light.direction));
                 float3 aCC = EvaluateClearcoat(
                 _ClearCoat, 1.0 - ccRoughAA,
                 aNoHG, aHoL, novG, aNoLG);
@@ -670,7 +687,9 @@ Shader "Custom/FabricPBR_TextureBased"
                 * light.shadowAttenuation;
 
                 addBodyLighting += aDiff * aNoLWrap * lightRad;
-                addReflectLighting += (aSpec + aSheen + aCC + aStripTerm) * aNoL * lightRad;
+                addReflectLighting += ((aSpec + aSheen) * aNoL
+                                     + (aStripTerm + aCC) * aNoLG)
+                                     * lightRad;
 
                 addBodyLighting += EvaluateTransmission(
                 normalWS, viewDirWS, light.direction,

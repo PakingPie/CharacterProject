@@ -520,6 +520,8 @@ Shader "Custom/BasePBR"
                 if (anisotropy > 0)
                     RotateTangentFrame(anisoT, anisoB, N0, _AnisotropicRotation);
                 anisoT = normalize(anisoT - normalWS * dot(normalWS, anisoT));
+
+                // anisoB is recalculated in RotateTangentFrame, but it get overwritten by the cross product. Is this a mistake?
                 anisoB = normalize(cross(normalWS, anisoT));
 
                 // ---- Anisotropic α ----
