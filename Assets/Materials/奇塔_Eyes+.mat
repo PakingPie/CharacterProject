@@ -118,6 +118,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _OutlineSampler:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _OutlineTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -209,6 +213,8 @@ Material:
     - _IsBlendAddToHighlighColor: 0
     - _IsBlendAddToMatCap: 1
     - _IsBlendBaseColor: 0
+    - _IsBlendBaseColorToOutline: 0
+    - _IsBlendLightColorToOutline: 1
     - _IsFilterHiCutPointLightColor: 1
     - _IsFilterLightColor: 0
     - _IsLightColorOutline: 1

@@ -36,7 +36,6 @@ Material:
   - _USEANALYTICSOFTNESS_ON
   - _USEANTIMOIRE_ON
   - _USEAOMAP_ON
-  - _USEBAKEDSKIN_ON
   - _USENORMALMAP_ON
   - _USEOPACITYMAP_ON
   - _USEPROCEDURALKNIT_ON
@@ -55,7 +54,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _AOMap:
-        m_Texture: {fileID: 2800000, guid: a90de02d3714e444b9112012a41c0e69, type: 3}
+        m_Texture: {fileID: 2800000, guid: 0f1b8216f49095e41aeec270dc218eef, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _AnisotropyMap:
@@ -67,7 +66,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 2800000, guid: d526c604221a3474481d766e555c11df, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
@@ -79,15 +78,15 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NormalMap:
-        m_Texture: {fileID: 2800000, guid: 629c59c77be3d564b8343f2e8aba15fb, type: 3}
+        m_Texture: {fileID: 2800000, guid: b3c8d668557eab7429be62acc48d4cf1, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OpacityMap:
-        m_Texture: {fileID: 2800000, guid: 4c2e6daf7ffd46e44b5f99d0fd5f6a4e, type: 3}
+        m_Texture: {fileID: 2800000, guid: 659f9f941f009904685789bdc8ca14ea, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _RoughnessMap:
-        m_Texture: {fileID: 2800000, guid: 9dc96896f6aa3904fadce281f0577e13, type: 3}
+        m_Texture: {fileID: 2800000, guid: 76881c778f0caef4c971b8cd938a2740, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _SkinTex:
@@ -107,7 +106,7 @@ Material:
     - _DenierMin: 0
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
-    - _F0: 0.34
+    - _F0: 0.04
     - _FabricMicroNDFStrength: 2
     - _FabricSpecAttenuation: 1
     - _ForwardZWrite: 0
@@ -128,14 +127,14 @@ Material:
     - _KnitRoughnessVar: 0.3
     - _KnitUVTiling: 30
     - _LoopAspect: 0.5
-    - _Metallic: 0
-    - _NormalStrength: 1
+    - _Metallic: 0.2
+    - _NormalStrength: 0.25
     - _NumberOfLoops: 40
     - _Opacity: 1
     - _OpeningSize: 0.1
     - _OpeningSoftness: 0.3
     - _Roughness: 1
-    - _SeeThruTint: 1
+    - _SeeThruTint: 0.85
     - _ShadowDensity: 2
     - _Sheen: 0
     - _SheenRoughness: 0.45
@@ -143,23 +142,23 @@ Material:
     - _StretchOpeningGrow: 0
     - _StretchReference: 0.01
     - _StretchTransparency: 0
-    - _StripSpecAnisotropy: 0
-    - _StripSpecIntensity: 3
-    - _StripSpecRoughness: 0.01
-    - _StripSpecWidth: 0.6
+    - _StripSpecAnisotropy: 0.291
+    - _StripSpecIntensity: 1
+    - _StripSpecRoughness: 0.25
+    - _StripSpecWidth: 0.221
     - _Subsurface: 0
     - _ThreadDarken: 1
     - _ThreadWidth: 1
     - _TransmissionDistortion: 0.725
     - _TransmissionPower: 2
     - _TwoLayerDarkening: 1
-    - _TwoLayerPower: 1
+    - _TwoLayerPower: 8
     - _TwoLayerSaturation: 1
     - _UseAOMap: 1
     - _UseAnalyticSoftness: 1
     - _UseAnisotropyMap: 0
     - _UseAntiMoire: 1
-    - _UseBakedSkin: 1
+    - _UseBakedSkin: 0
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 0
     - _UseHeightMap: 0
@@ -182,6 +181,6 @@ Material:
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _StripSpecDirection: {r: 1, g: 0, b: 0, a: 0}
     - _SubsurfaceColor: {r: 1, g: 0.72, b: 0.58, a: 1}
-    - _TextureTiling: {r: 8, g: 8, b: 0, a: 0}
+    - _TextureTiling: {r: 4, g: 4, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
