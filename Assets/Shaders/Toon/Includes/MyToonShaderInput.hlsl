@@ -166,7 +166,6 @@
         float4 _BaseMap_ST;
         half4 _BaseColor;
         half4 _EmissionColor;
-        half _Surface;
         half _BumpScale;
 
         half _Metallic;
@@ -234,11 +233,9 @@
         return specGloss;
     }
 
-    // Implement LitForwardPass Functions
     half SampleOcclusion(float2 uv)
     {
         #ifdef _OCCLUSIONMAP
-            // TODO: Controls things like these by exposing SHADER_QUALITY levels (low, medium, high)
             #if defined(SHADER_API_GLES)
                 return SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, uv).g;
             #else

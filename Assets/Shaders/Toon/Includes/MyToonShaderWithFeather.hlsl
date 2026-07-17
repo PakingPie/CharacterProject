@@ -1,6 +1,38 @@
 #ifndef URP_MY_TOON_SHADER_WITH_FEATHER_INCLUDED_HLSL
     #define URP_MY_TOON_SHADER_WITH_FEATHER_INCLUDED_HLSL
 
+    #define REQUIRES_WORLD_SPACE_POS_INTERPOLATOR
+    #define REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR
+
+    struct Varyings
+    {
+        float2 uv;
+        float3 positionWS;
+        half3 normalWS;
+        half4 tangentWS;
+        half4 bitangentWS;
+        float4 shadowCoord;
+        half4 fogFactorAndVertexLight;
+        half fogFactor;
+        float2 staticLightmapUV;
+        half3 vertexSH;
+        float4 positionCS;
+        UNITY_VERTEX_INPUT_INSTANCE_ID
+        UNITY_VERTEX_OUTPUT_STEREO
+    };
+
+    void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData)
+    {
+        inputData = (InputData)0;
+        inputData.positionWS = input.positionWS;
+        inputData.normalWS = NormalizeNormalPerPixel(input.normalWS);
+        inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+        inputData.fogCoord = input.fogFactor;
+        inputData.vertexLighting = input.fogFactorAndVertexLight.yzw;
+        inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.vertexSH, inputData.normalWS);
+        inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
+    }
+
     struct a2v
     {
         float4 vertex : POSITION;
@@ -171,10 +203,6 @@
             input.fogFactor = i.fogFactor;
         #endif
 
-        #ifdef REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR
-            input.shadowCoord = i.shadowCoord;
-        #endif
-
         #ifdef REQUIRES_WORLD_SPACE_POS_INTERPOLATOR
             input.positionWS = i.posWorld.xyz;
         #endif
@@ -203,7 +231,11 @@
         half3 envColor = GetGlobalIllumination(brdfData, inputData.bakedGI, surfaceData.occlusion, inputData.normalWS, inputData.viewDirectionWS);
         envColor *= 1.8f;
 
-        ToonLight mainLight = GetToonMainLightByID(i.mainLightID, i.posWorld.xyz, inputData.shadowCoord, i.positionCS);
+        float4 toonShadowCoord = 0;
+        #if defined(_MAIN_LIGHT_SHADOWS) && !defined(_RECEIVE_SHADOWS_OFF)
+            toonShadowCoord = i.shadowCoord;
+        #endif
+        ToonLight mainLight = GetToonMainLightByID(i.mainLightID, i.posWorld.xyz, toonShadowCoord, i.positionCS);
         // This returns black due to mainlight.distanceAttenuation being 0, fixed by setting it to 1
         half3 mainLightColor = GetLightColor(mainLight);
         
