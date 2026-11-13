@@ -21,10 +21,11 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: UnityChanCloth
-  m_Shader: {fileID: 4800000, guid: 922bb1fb68fc4114b9a81df5fb6887a8, type: 3}
+  m_Shader: {fileID: 4800000, guid: eb3f88d8c4f2ef843b70393ed14e8836, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
+  m_ValidKeywords:
+  - _LIVE_TENSION
   m_InvalidKeywords:
   - Use AO Map
   - Use Height Map
@@ -36,6 +37,7 @@ Material:
   - _USEANALYTICSOFTNESS_ON
   - _USEANTIMOIRE_ON
   - _USEAOMAP_ON
+  - _USEKNITDETAIL_ON
   - _USENORMALMAP_ON
   - _USEOPACITYMAP_ON
   - _USEPROCEDURALKNIT_ON
@@ -65,8 +67,16 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _DensityMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _HeightMap:
         m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _KnitDetailMap:
+        m_Texture: {fileID: 2800000, guid: 58be73b34512cfc4d8cb084b60ddb236, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
@@ -95,6 +105,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _AmbientIntensity: 0.5
     - _AmbientOcclusion: 1
     - _AmbientTransmission: 0.203
     - _AnisotropicIntensity: 1
@@ -104,11 +115,14 @@ Material:
     - _ClearCoatRoughness: 0
     - _DenierMax: 1
     - _DenierMin: 0
+    - _DenseOpacity: 0.9
+    - _DenseZoneOpacity: 0.7
     - _DiffuseWrap: 0.25
     - _EnableEmission: 0
     - _F0: 0.04
     - _FabricMicroNDFStrength: 2
     - _FabricSpecAttenuation: 1
+    - _FacingOpacity: 0.6
     - _ForwardZWrite: 0
     - _FresnelOpacityPower: 1
     - _FresnelOpacityStrength: 1
@@ -118,35 +132,65 @@ Material:
     - _GapOpacity: 0
     - _GapShapePower: 2
     - _GapWidthRatio: 3
+    - _GlintDensity: 0.4
+    - _GlintSharpness: 100
+    - _GlintStrength: 1
+    - _GrazingLimit: 0.12
     - _HeightScale: 0.02
+    - _HighlightIntensity: 0.05
+    - _HighlightRoughness: 0.55
+    - _HighlightStrength: 0.25
+    - _KnitDensityStrength: 0.5
     - _KnitFadeEnd: 2
     - _KnitFadeStart: 0.01
     - _KnitJitter: 0.15
     - _KnitNoiseScale: 10
-    - _KnitNormalStrength: 1.5
+    - _KnitNormalStrength: 0.5
     - _KnitRoughnessVar: 0.3
+    - _KnitTiling: 100
     - _KnitUVTiling: 30
+    - _LiveTension: 1
     - _LoopAspect: 0.5
     - _Metallic: 0.2
     - _NormalStrength: 0.25
     - _NumberOfLoops: 40
+    - _OffsetFactor: -1
+    - _OffsetUnits: -1
     - _Opacity: 1
     - _OpeningSize: 0.1
     - _OpeningSoftness: 0.3
+    - _PearlAmount: 0.3
+    - _PearlEdge: 0.8
+    - _PearlGrainScale: 1000
+    - _PearlRandomness: 0.4
+    - _PearlStrength: 0.03
     - _Roughness: 1
     - _SeeThruTint: 0.85
+    - _ShadeFeather: 0.05
+    - _ShadeStep: 0.5
     - _ShadowDensity: 2
     - _Sheen: 0
+    - _SheenAmbient: 0.3
+    - _SheenIntensity: 0.05
+    - _SheenLightWrap: 0.5
+    - _SheenPosition: 0.35
+    - _SheenPower: 3
     - _SheenRoughness: 0.45
+    - _SheenStrength: 0.2
+    - _SheenWidth: 0.3
+    - _SheerOpacity: 0.5
     - _SpecularTint: 0
     - _StretchOpeningGrow: 0
     - _StretchReference: 0.01
+    - _StretchSheerness: 0.2
     - _StretchTransparency: 0
     - _StripSpecAnisotropy: 0.291
     - _StripSpecIntensity: 1
     - _StripSpecRoughness: 0.25
     - _StripSpecWidth: 0.221
     - _Subsurface: 0
+    - _TensionDebug: 0
+    - _TensionSheerness: 3
     - _ThreadDarken: 1
     - _ThreadWidth: 1
     - _TransmissionDistortion: 0.725
@@ -161,7 +205,9 @@ Material:
     - _UseBakedSkin: 0
     - _UseCustomCubemap: 0
     - _UseDenierFromVertexR: 0
+    - _UseDensityMask: 0
     - _UseHeightMap: 0
+    - _UseKnitDetail: 1
     - _UseMetallicMap: 0
     - _UseNormalMap: 1
     - _UseOpacityMap: 1
@@ -171,11 +217,15 @@ Material:
     - _UseStretchFromVertexG: 1
     - _UseVertexAlpha: 0
     - _UseWardAnisotropic: 1
+    - _ViewDependence: 1
     m_Colors:
     - _AnisotropicDirection: {r: 1, g: 0, b: 0, a: 0}
-    - _BaseColor: {r: 0.3, g: 0.25, b: 0.25, a: 1}
+    - _BaseColor: {r: 0.05, g: 0.049999982, b: 0.049999982, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FuzzColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+    - _HighlightColor: {r: 1, g: 1, b: 1, a: 1}
+    - _PearlColor: {r: 1, g: 0.95, b: 0.9, a: 1}
+    - _ShadeColor: {r: 0.54999995, g: 0.5, b: 0.6, a: 1}
     - _SheenColor: {r: 1, g: 1, b: 1, a: 1}
     - _SkinColor: {r: 0.87, g: 0.72, b: 0.63, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
