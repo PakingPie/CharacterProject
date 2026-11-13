@@ -13,7 +13,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
     //             optional knit texture
     //   sheerness T = exp(-tau / N.V)  → sheer facing the camera, opaque at
     //             the silhouette
-    //   lighting  toon ramp for the fabric colour, one soft rim sheen and
+    //   lighting  toon ramp for the fabric colour, one soft sheen band and
     //             one broad highlight
     //
     // Render order: last in the opaque range, depth write on. The leg must
@@ -27,19 +27,22 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _BaseColor("Fabric Color", Color) = (0.05, 0.05, 0.06, 1)
 
         [Header(Sheerness)]
-        _SheerOpacity("Opacity Facing Camera", Range(0, 0.98)) = 0.45
+        // Opacity and strength sliders are perceptual: 0.5 looks half as
+        // strong as 1 on screen. They are converted to linear light in the
+        // fragment shader.
+        _FacingOpacity("Opacity Facing Camera", Range(0, 1)) = 0.5
         _ViewDependence("View Dependence (0 = flat  1 = physical)", Range(0, 1)) = 1.0
         _GrazingLimit("Silhouette Limit (min N.V)", Range(0.02, 0.5)) = 0.12
 
         [Header(Dense Zones  (welt  heel  toe))]
-        _DenseOpacity("Dense Zone Opacity", Range(0, 0.999)) = 0.95
+        _DenseZoneOpacity("Dense Zone Opacity", Range(0, 1)) = 0.7
         [Toggle] _UseDenierFromVertexR("Vertex Red = Dense Zone", Float) = 0
         [Toggle] _UseDensityMask("Use Density Mask Texture", Float) = 0
         [NoScaleOffset] _DensityMask("Density Mask (R = dense, UV0, not tiled)", 2D) = "black" {}
 
         [Header(Stretch)]
         [Toggle] _UseStretchFromVertexG("Vertex Green = Stretch", Float) = 0
-        _StretchSheerness("Stretch Makes Sheerer", Range(0, 1)) = 0.5
+        _StretchSheerness("Stretch Makes Sheerer", Range(0, 1)) = 0.2
 
         [Header(Toon Shading)]
         _ShadeColor("Shade Tint (multiplies fabric color)", Color) = (0.55, 0.5, 0.6, 1)
@@ -47,25 +50,27 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _ShadeFeather("Shade Feather", Range(0.0001, 0.5)) = 0.05
         _AmbientIntensity("Ambient Intensity", Range(0, 2)) = 0.5
 
-        [Header(Rim Sheen)]
+        [Header(Sheen Band)]
+        // A broad soft band on the lit side, just inside the silhouette.
         _SheenColor("Sheen Color", Color) = (1, 1, 1, 1)
-        _SheenIntensity("Sheen Intensity", Range(0, 2)) = 0.35
-        _SheenPower("Sheen Falloff", Range(0.5, 8)) = 3.0
+        _SheenStrength("Sheen Strength", Range(0, 1)) = 0.3
+        _SheenPosition("Sheen Position (0 = edge  1 = centre)", Range(0, 1)) = 0.35
+        _SheenWidth("Sheen Width", Range(0.05, 1)) = 0.3
         _SheenLightWrap("Sheen Light Wrap", Range(0, 1)) = 0.5
         _SheenAmbient("Sheen From Ambient", Range(0, 1)) = 0.3
 
         [Header(Soft Highlight)]
         _HighlightColor("Highlight Color", Color) = (1, 1, 1, 1)
-        _HighlightIntensity("Highlight Intensity", Range(0, 2)) = 0.1
+        _HighlightStrength("Highlight Strength", Range(0, 1)) = 0.25
         _HighlightRoughness("Highlight Roughness", Range(0.2, 1)) = 0.55
 
         [Header(Pearl and Glints)]
         // Pearl: a soft grainy shimmer. Glints: sparse sparkles that twinkle
         // when the light or camera moves. Both are fixed to the UVs.
         _PearlColor("Pearl Color", Color) = (1, 0.95, 0.9, 1)
-        _PearlStrength("Pearl Strength", Range(0, 2)) = 0.2
+        _PearlAmount("Pearl Strength", Range(0, 1)) = 0.2
         _PearlRandomness("Pearl Grain Contrast", Range(0, 1)) = 0.5
-        _PearlEdge("Pearl Towards Edge", Range(0, 1)) = 0.5
+        _PearlEdge("Pearl Follows Sheen Band", Range(0, 1)) = 0.5
         _PearlGrainScale("Grain Scale (grains per UV)", Float) = 600
         _GlintStrength("Glint Strength", Range(0, 5)) = 0.5
         _GlintDensity("Glint Density", Range(0, 1)) = 0.1
@@ -128,11 +133,11 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
 
-                float  _SheerOpacity;
+                float  _FacingOpacity;
                 float  _ViewDependence;
                 float  _GrazingLimit;
 
-                float  _DenseOpacity;
+                float  _DenseZoneOpacity;
                 float  _UseDenierFromVertexR;
                 float  _UseDensityMask;
 
@@ -145,17 +150,18 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float  _AmbientIntensity;
 
                 float4 _SheenColor;
-                float  _SheenIntensity;
-                float  _SheenPower;
+                float  _SheenStrength;
+                float  _SheenPosition;
+                float  _SheenWidth;
                 float  _SheenLightWrap;
                 float  _SheenAmbient;
 
                 float4 _HighlightColor;
-                float  _HighlightIntensity;
+                float  _HighlightStrength;
                 float  _HighlightRoughness;
 
                 float4 _PearlColor;
-                float  _PearlStrength;
+                float  _PearlAmount;
                 float  _PearlRandomness;
                 float  _PearlEdge;
                 float  _PearlGrainScale;
@@ -296,7 +302,20 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                                   halfLambert * shadowAtten);
             }
 
-            // Wrapped N.L used to light the rim sheen.
+            // Slider value (perceptual) → linear light.
+            float PerceptualToLinear(float x)
+            {
+                return pow(saturate(x), 2.2);
+            }
+
+            // Perceptual opacity → linear opacity. 0.5 on the slider darkens
+            // the skin to half its on-screen brightness.
+            float PerceptualOpacity(float x)
+            {
+                return 1.0 - pow(1.0 - saturate(x), 2.2);
+            }
+
+            // Wrapped N.L used to light the sheen band.
             float SheenLight(float3 N, float3 L)
             {
                 return saturate((dot(N, L) + _SheenLightWrap) / (1.0 + _SheenLightWrap));
@@ -389,7 +408,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 viewDirWS = SafeNormalize(
                 float3(IN.normalWS.w, IN.tangentWS.w, IN.bitangentWS.w));
 
-                // Geometric normal drives sheerness, toon ramp and rim sheen,
+                // Geometric normal drives sheerness, toon ramp and sheen band,
                 // so none of them pick up per-thread noise.
                 float3 geomNormalWS = normalize(IN.normalWS.xyz);
                 float  novG = saturate(dot(geomNormalWS, viewDirWS));
@@ -437,8 +456,9 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 }
 
                 // Opacity when looking straight at the surface.
-                float facingOpacity = lerp(_SheerOpacity,
-                                           max(_DenseOpacity, _SheerOpacity), dense);
+                float sheerOpacity = PerceptualOpacity(_FacingOpacity);
+                float denseOpacity = max(PerceptualOpacity(_DenseZoneOpacity), sheerOpacity);
+                float facingOpacity = lerp(sheerOpacity, denseOpacity, dense);
 
                 // Optical depth at normal incidence.
                 float tau = -log(max(1.0 - facingOpacity, 1e-4));
@@ -495,11 +515,15 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float  hlAlpha   = _HighlightRoughness * _HighlightRoughness;
                 float  hlAlphaSq = saturate(hlAlpha * hlAlpha + aaKernel);
 
-                float rim = pow(1.0 - novG, _SheenPower);
+                // Sheen band: a soft stripe that peaks where N.V equals
+                // _SheenPosition, just inside the silhouette and not on the
+                // very edge, so the edge itself stays dark.
+                float sheenOffset = (novG - _SheenPosition) / max(_SheenWidth, 0.01);
+                float sheenBand   = exp(-sheenOffset * sheenOffset);
 
                 // Accumulators.
                 //   bodyLight   : light on the fabric colour (toon ramp)
-                //   sheenLight  : light that feeds the rim sheen
+                //   sheenLight  : light that feeds the sheen band and pearl
                 //   highlight   : soft highlight
                 float3 bodyLight  = ambient * _AmbientIntensity + inputData.vertexLighting;
                 float3 sheenLight = ambient * _SheenAmbient;
@@ -588,14 +612,17 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // ══════════════════════════════════════════
                 float3 fabricColor = _BaseColor.rgb * bodyLight;
 
-                float3 gloss = _SheenColor.rgb * _SheenIntensity * rim * sheenLight
-                             + _HighlightColor.rgb * _HighlightIntensity * highlight;
+                float3 gloss = _SheenColor.rgb * PerceptualToLinear(_SheenStrength)
+                                 * sheenBand * sheenLight
+                             + _HighlightColor.rgb * PerceptualToLinear(_HighlightStrength)
+                                 * highlight;
 
-                // Pearl: soft light broken into grains, optionally pushed
-                // towards the silhouette. Averages to _PearlStrength.
+                // Pearl: soft light broken into grains, optionally confined
+                // to the sheen band.
                 float pearlGrain = lerp(1.0, grainBrightness * 2.0, _PearlRandomness);
-                float pearlView  = lerp(1.0, (1.0 - novG) * (1.0 - novG), _PearlEdge);
-                gloss += _PearlColor.rgb * _PearlStrength * pearlGrain * pearlView * sheenLight;
+                float pearlView  = lerp(1.0, sheenBand, _PearlEdge);
+                gloss += _PearlColor.rgb * PerceptualToLinear(_PearlAmount)
+                       * pearlGrain * pearlView * sheenLight;
 
                 // Glints: small bright sparkles.
                 gloss += _PearlColor.rgb * _GlintStrength * glint;

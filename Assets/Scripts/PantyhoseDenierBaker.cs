@@ -43,7 +43,7 @@ using UnityEditor;
 /// ─────────────
 ///     ✔  "Vertex Red = Dense Zone"   (_UseDenierFromVertexR)
 ///     ✔  "Vertex Green = Stretch"    (_UseStretchFromVertexG)
-///     •  Dense Zone Opacity          (_DenseOpacity)   opacity where R = 1
+///     •  Dense Zone Opacity          (_DenseZoneOpacity) opacity where R = 1
 ///     •  Stretch Makes Sheerer       (_StretchSheerness)
 ///
 /// USAGE
