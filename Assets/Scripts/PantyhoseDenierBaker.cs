@@ -54,9 +54,9 @@ using UnityEditor;
 /// SHADER SETUP
 /// ─────────────
 /// On the FabricPBR_ProceduralPattern material:
-///     ✔  Enable "Vertex Red = Denier Opacity" (_UseDenierFromVertexR)
-///     •  Sheer Area Opacity (R=0)  →  opacity at flat zones  (e.g. 0.0)
-///     •  Dense zones (R=1)         →  always fully opaque    (hardcoded 1.0)
+///     ✔  Enable "Vertex Red = Dense Zone" (_UseDenierFromVertexR)
+///     •  Opacity Facing Camera (R=0)  →  sheer zones  (_SheerOpacity)
+///     •  Dense Zone Opacity    (R=1)  →  dense zones  (_DenseOpacity)
 ///
 /// USAGE
 /// ──────
