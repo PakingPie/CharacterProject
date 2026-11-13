@@ -105,10 +105,91 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _KnitDensityStrength("Knit Density Strength", Range(0, 1)) = 0.5
         _KnitNormalStrength("Knit Normal Strength", Range(0, 2)) = 0.5
 
+        [Header(Outline)]
+        // Same unit as the toon shader's Outline Thickness. Make it at least
+        // as wide as the leg's outline so it covers it.
+        _OutlineWidth("Outline Width (0 = off)", Range(0, 5)) = 0
+        _OutlineColor("Outline Color", Color) = (0.02, 0.02, 0.03, 1)
+
         [Header(Depth)]
         _OffsetFactor("Depth Offset Factor", Float) = -1
         _OffsetUnits("Depth Offset Units", Float) = -1
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Shared by every pass. The material values must be identical in all
+    // passes for the SRP Batcher.
+    // ─────────────────────────────────────────────────────────────────────
+    HLSLINCLUDE
+
+    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+    CBUFFER_START(UnityPerMaterial)
+        float4 _BaseColor;
+
+        float  _FacingOpacity;
+        float  _ViewDependence;
+        float  _GrazingLimit;
+
+        float  _DenseZoneOpacity;
+        float  _UseDenierFromVertexR;
+        float  _UseDensityMask;
+
+        float  _UseStretchFromVertexG;
+        float  _StretchSheerness;
+
+        float  _LiveTension;
+        float  _TensionSheerness;
+        float  _TensionDebug;
+
+        float  _WrinkleStrength;
+        float  _WrinkleDensity;
+        float  _WrinkleSensitivity;
+        float  _WrinkleTiling;
+        float  _UseWrinkleMap;
+        float  _WrinkleAngle;
+
+        float4 _ShadeColor;
+        float  _ShadeStep;
+        float  _ShadeFeather;
+        float  _AmbientIntensity;
+
+        float4 _SheenColor;
+        float  _SheenStrength;
+        float  _SheenPosition;
+        float  _SheenWidth;
+        float  _SheenLightWrap;
+        float  _SheenAmbient;
+
+        float4 _HighlightColor;
+        float  _HighlightStrength;
+        float  _HighlightRoughness;
+
+        float4 _PearlColor;
+        float  _PearlAmount;
+        float  _PearlRandomness;
+        float  _PearlEdge;
+        float  _PearlGrainScale;
+        float  _GlintStrength;
+        float  _GlintDensity;
+        float  _GlintSharpness;
+
+        float  _UseKnitDetail;
+        float4 _KnitDetailMap_TexelSize;
+        float4 _WrinkleMap_TexelSize;
+        float  _KnitTiling;
+        float  _KnitAspect;
+        float  _KnitDensityStrength;
+        float  _KnitNormalStrength;
+
+        float  _OutlineWidth;
+        float4 _OutlineColor;
+
+        float  _OffsetFactor;
+        float  _OffsetUnits;
+    CBUFFER_END
+
+    ENDHLSL
 
     SubShader
     {
@@ -155,68 +236,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             TEXTURE2D(_DensityMask);    SAMPLER(sampler_DensityMask);
             TEXTURE2D(_KnitDetailMap);  SAMPLER(sampler_KnitDetailMap);
             TEXTURE2D(_WrinkleMap);     SAMPLER(sampler_WrinkleMap);
-
-            CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor;
-
-                float  _FacingOpacity;
-                float  _ViewDependence;
-                float  _GrazingLimit;
-
-                float  _DenseZoneOpacity;
-                float  _UseDenierFromVertexR;
-                float  _UseDensityMask;
-
-                float  _UseStretchFromVertexG;
-                float  _StretchSheerness;
-
-                float  _LiveTension;
-                float  _TensionSheerness;
-                float  _TensionDebug;
-
-                float  _WrinkleStrength;
-                float  _WrinkleDensity;
-                float  _WrinkleSensitivity;
-                float  _WrinkleTiling;
-                float  _UseWrinkleMap;
-                float  _WrinkleAngle;
-
-                float4 _ShadeColor;
-                float  _ShadeStep;
-                float  _ShadeFeather;
-                float  _AmbientIntensity;
-
-                float4 _SheenColor;
-                float  _SheenStrength;
-                float  _SheenPosition;
-                float  _SheenWidth;
-                float  _SheenLightWrap;
-                float  _SheenAmbient;
-
-                float4 _HighlightColor;
-                float  _HighlightStrength;
-                float  _HighlightRoughness;
-
-                float4 _PearlColor;
-                float  _PearlAmount;
-                float  _PearlRandomness;
-                float  _PearlEdge;
-                float  _PearlGrainScale;
-                float  _GlintStrength;
-                float  _GlintDensity;
-                float  _GlintSharpness;
-
-                float  _UseKnitDetail;
-                float4 _KnitDetailMap_TexelSize;
-                float4 _WrinkleMap_TexelSize;
-                float  _KnitTiling;
-                float  _KnitAspect;
-                float  _KnitDensityStrength;
-                float  _KnitNormalStrength;
-
-                float  _OffsetFactor;
-                float  _OffsetUnits;
-            CBUFFER_END
 
             #ifdef _LIVE_TENSION
                 // One value per vertex, written every frame by StockingTension:
@@ -754,6 +773,64 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 premultiplied = (fabricColor + gloss) * alpha;
 
                 return float4(premultiplied, alpha);
+            }
+            ENDHLSL
+        }
+
+        // ═══════════════════════════════════════════════
+        // Outline: inverted hull in the stocking's colour. Made at least as
+        // wide as the leg's own outline, it covers it.
+        // ═══════════════════════════════════════════════
+        Pass
+        {
+            Name "Outline"
+            Tags { "LightMode" = "SRPDefaultUnlit" }
+
+            Cull Front
+            ZWrite On
+            ZTest LEqual
+
+            HLSLPROGRAM
+            #pragma vertex OutlineVert
+            #pragma fragment OutlineFrag
+            #pragma multi_compile_fog
+            #pragma multi_compile_instancing
+
+            struct OutlineAttributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct OutlineVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                half   fogFactor  : TEXCOORD0;
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            OutlineVaryings OutlineVert(OutlineAttributes IN)
+            {
+                OutlineVaryings OUT = (OutlineVaryings)0;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+
+                // Push the surface out along its normal.
+                float3 positionOS = IN.positionOS.xyz
+                                  + normalize(IN.normalOS) * (_OutlineWidth * 0.001);
+
+                // Switched off: collapse every triangle so nothing is drawn.
+                OUT.positionCS = _OutlineWidth > 0
+                    ? TransformObjectToHClip(positionOS)
+                    : float4(0.0, 0.0, 0.0, 1.0);
+                OUT.fogFactor = ComputeFogFactor(OUT.positionCS.z);
+                return OUT;
+            }
+
+            float4 OutlineFrag(OutlineVaryings IN) : SV_Target
+            {
+                return float4(MixFog(_OutlineColor.rgb, IN.fogFactor), 1.0);
             }
             ENDHLSL
         }
