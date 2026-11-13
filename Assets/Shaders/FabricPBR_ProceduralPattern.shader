@@ -105,6 +105,12 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _KnitDensityStrength("Knit Density Strength", Range(0, 1)) = 0.5
         _KnitNormalStrength("Knit Normal Strength", Range(0, 2)) = 0.5
 
+        [Header(Skin Tint  (coloured tights))]
+        // Colours the skin seen through the fabric, for tights that are not
+        // black or grey. White = no tint.
+        [Toggle] _UseSkinTint("Tint Skin Through Fabric", Float) = 0
+        _SkinTint("Skin Tint", Color) = (1, 1, 1, 1)
+
         [Header(Outline)]
         // Same unit as the toon shader's Outline Thickness. Make it at least
         // as wide as the leg's outline so it covers it.
@@ -181,6 +187,9 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         float  _KnitAspect;
         float  _KnitDensityStrength;
         float  _KnitNormalStrength;
+
+        float  _UseSkinTint;
+        float4 _SkinTint;
 
         float  _OutlineWidth;
         float4 _OutlineColor;
@@ -772,7 +781,70 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // Both terms scale with coverage: no fabric, no fibres to shine.
                 float3 premultiplied = (fabricColor + gloss) * alpha;
 
+                // The SkinTint pass multiplies the finished pixel by the tint
+                // afterwards. Dividing the fabric by it here cancels that out
+                // for the fabric, so only the skin underneath ends up tinted.
+                if (_UseSkinTint > 0)
+                {
+                    premultiplied /= max(_SkinTint.rgb, 0.05);
+                }
+
                 return float4(premultiplied, alpha);
+            }
+            ENDHLSL
+        }
+
+        // ═══════════════════════════════════════════════
+        // Skin tint: multiplies the pixel by a colour after the fabric has
+        // been blended. Together with the division in ForwardLit this gives
+        //     skin * tint * (1 - alpha) + fabric
+        // Must draw after ForwardLit.
+        // ═══════════════════════════════════════════════
+        Pass
+        {
+            Name "SkinTint"
+            Tags { "LightMode" = "UniversalForwardOnly" }
+
+            Cull Back
+            ZWrite Off
+            ZTest LEqual
+            Offset [_OffsetFactor], [_OffsetUnits]
+            Blend DstColor Zero
+            ColorMask RGB
+
+            HLSLPROGRAM
+            #pragma vertex TintVert
+            #pragma fragment TintFrag
+            #pragma multi_compile_instancing
+
+            struct TintAttributes
+            {
+                float4 positionOS : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct TintVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            TintVaryings TintVert(TintAttributes IN)
+            {
+                TintVaryings OUT = (TintVaryings)0;
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+
+                // Switched off: collapse every triangle so nothing is drawn.
+                OUT.positionCS = _UseSkinTint > 0
+                    ? TransformObjectToHClip(IN.positionOS.xyz)
+                    : float4(0.0, 0.0, 0.0, 1.0);
+                return OUT;
+            }
+
+            float4 TintFrag(TintVaryings IN) : SV_Target
+            {
+                return float4(max(_SkinTint.rgb, 0.05), 1.0);
             }
             ENDHLSL
         }
