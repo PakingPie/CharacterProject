@@ -44,6 +44,13 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         [Toggle] _UseStretchFromVertexG("Vertex Green = Stretch", Float) = 0
         _StretchSheerness("Stretch Makes Sheerer", Range(0, 1)) = 0.2
 
+        [Header(Live Tension)]
+        // Needs the StockingTension component on the same object. It measures
+        // how much the fabric is stretched or squashed by the current pose.
+        [Toggle(_LIVE_TENSION)] _LiveTension("Live Tension (needs StockingTension)", Float) = 0
+        _TensionSheerness("Tension Makes Sheerer (1 = physical)", Range(0, 3)) = 1.0
+        [Toggle] _TensionDebug("Debug View (red = stretched  blue = squashed)", Float) = 0
+
         [Header(Toon Shading)]
         _ShadeColor("Shade Tint (multiplies fabric color)", Color) = (0.55, 0.5, 0.6, 1)
         _ShadeStep("Shade Step", Range(0, 1)) = 0.5
@@ -114,6 +121,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             #pragma vertex vert
             #pragma fragment frag
 
+            // Live tension reads a per-vertex buffer, which needs target 4.5.
+            #pragma target 4.5
+            #pragma shader_feature_local _LIVE_TENSION
+
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
@@ -143,6 +154,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 float  _UseStretchFromVertexG;
                 float  _StretchSheerness;
+
+                float  _LiveTension;
+                float  _TensionSheerness;
+                float  _TensionDebug;
 
                 float4 _ShadeColor;
                 float  _ShadeStep;
@@ -178,6 +193,12 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float  _OffsetUnits;
             CBUFFER_END
 
+            #ifdef _LIVE_TENSION
+                // One value per vertex, written every frame by StockingTension:
+                // current surface area / rest surface area. 1 = relaxed.
+                StructuredBuffer<float> _TensionBuffer;
+            #endif
+
             // ── Structs ──────────────────────────────────
             struct Attributes
             {
@@ -188,6 +209,9 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float2 staticLightmapUV  : TEXCOORD1;
                 float2 dynamicLightmapUV : TEXCOORD2;
                 float4 color             : COLOR;
+                #ifdef _LIVE_TENSION
+                    uint vertexID        : SV_VertexID;
+                #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -220,6 +244,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 half   fogFactor   : TEXCOORD10;
                 float4 vertexColor : TEXCOORD11;
+                float  tension     : TEXCOORD12;
 
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
@@ -247,6 +272,13 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 OUT.bitangentWS = float4(normalInput.bitangentWS, viewDirWS.z);
 
                 OUT.vertexColor = IN.color;
+
+                OUT.tension = 1.0;
+                #ifdef _LIVE_TENSION
+                    // 0 means the buffer was never filled: treat as relaxed.
+                    float tensionValue = _TensionBuffer[IN.vertexID];
+                    OUT.tension = tensionValue > 0.0 ? tensionValue : 1.0;
+                #endif
 
                 OUTPUT_LIGHTMAP_UV(IN.staticLightmapUV, unity_LightmapST, OUT.staticLightmapUV);
                 #ifdef DYNAMICLIGHTMAP_ON
@@ -466,6 +498,20 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 if (_UseStretchFromVertexG > 0)
                 {
                     tau *= 1.0 - saturate(IN.vertexColor.g) * _StretchSheerness;
+                }
+
+                // Live tension: the same yarn spread over a larger area is
+                // thinner, and bunched up over a smaller area is denser.
+                float tension = clamp(IN.tension, 0.25, 4.0);
+                tau *= pow(tension, -_TensionSheerness);
+
+                if (_TensionDebug > 0)
+                {
+                    float3 relaxed = float3(0.5, 0.5, 0.5);
+                    float3 debugColor = tension > 1.0
+                        ? lerp(relaxed, float3(1.0, 0.0, 0.0), saturate((tension - 1.0) * 2.0))
+                        : lerp(relaxed, float3(0.0, 0.2, 1.0), saturate((1.0 - tension) * 2.0));
+                    return float4(debugColor, 1.0);
                 }
 
                 tau *= knitDensity;
