@@ -20,8 +20,8 @@ using UnityEditor;
 /// HOW THE ZONES ARE FOUND
 /// ────────────────────────
 ///   Welt   The open edge at the top of each stocking is detected from the
-///          mesh boundary. Vertices within "Welt Width" of that edge,
-///          measured along the surface, are marked dense.
+///          mesh boundary. Vertices within "Welt Width" of that edge are
+///          marked dense.
 ///   Toe    On each leg, the front part of the foot within "Toe Length"
 ///          of the toe tip.
 ///   Heel   On each leg, the back part of the foot within "Heel Length"
@@ -101,8 +101,7 @@ public class PantyhoseDenierBaker : MonoBehaviour
     [Range(0f, 1f)]
     public float weltDensity = 1.0f;
 
-    [Tooltip("Width of the welt band in metres, measured along the surface\n" +
-             "from the top open edge.")]
+    [Tooltip("Width of the welt band in metres, measured from the top open edge.")]
     [Min(0f)]
     public float weltWidth = 0.05f;
 
@@ -135,6 +134,11 @@ public class PantyhoseDenierBaker : MonoBehaviour
     [Tooltip("Soft edge of every zone in metres.")]
     [Min(0.0001f)]
     public float zoneFeather = 0.015f;
+
+    [Tooltip("Smoothing passes over the finished zones. Evens out ragged zone\n" +
+             "borders on low-poly meshes. 0 = off.")]
+    [Range(0, 8)]
+    public int zoneSmoothingPasses = 2;
 
     // ─── Stretch (Green channel) ─────────────────────────────────────────────
     [Header("Stretch (Green Channel)")]
@@ -273,8 +277,8 @@ public class PantyhoseDenierBaker : MonoBehaviour
         if (weltDensity > 0f && weltWidth > 0f)
         {
             float[] weltDist = ComputeWeltDistance(
-                vertices, scale, triangles, canon, canonAdj, component, componentCount, h,
-                weltWidth + zoneFeather, out weltLoops);
+                vertices, scale, triangles, canon, component, componentCount, h,
+                out weltLoops);
 
             for (int i = 0; i < vertCount; i++)
             {
@@ -327,6 +331,9 @@ public class PantyhoseDenierBaker : MonoBehaviour
                 dense[i] = Mathf.Max(dense[i], mLen * mHgt * heelDensity);
             }
         }
+
+        for (int pass = 0; pass < zoneSmoothingPasses; pass++)
+            SmoothOnGraph(dense, adj);
 
         // ── Green: stretch ───────────────────────────────────────────────────
         float[] stretch = new float[vertCount];
@@ -555,14 +562,14 @@ public class PantyhoseDenierBaker : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Distance along the surface (metres) from the top open edge of each mesh
-    /// island. Indexed by canonical vertex. Vertices further than maxDistance
-    /// keep float.MaxValue.
+    /// Distance in metres from the top open edge of each mesh island.
+    /// Indexed by canonical vertex. Islands without an open edge keep
+    /// float.MaxValue.
     /// </summary>
     private static float[] ComputeWeltDistance(
         Vector3[] positions, float scale, int[] tris, int[] canon,
-        HashSet<int>[] canonAdj, int[] component, int componentCount, float[] h,
-        float maxDistance, out int weltLoopCount)
+        int[] component, int componentCount, float[] h,
+        out int weltLoopCount)
     {
         int vertCount = positions.Length;
 
@@ -627,37 +634,51 @@ public class PantyhoseDenierBaker : MonoBehaviour
         for (int c = 0; c < componentCount; c++)
             if (bestLoop[c] >= 0) weltLoopCount++;
 
-        // Shortest path along edges from the welt loops (Dijkstra).
-        float[] dist = new float[vertCount];
-        for (int i = 0; i < vertCount; i++) dist[i] = float.MaxValue;
+        // Collect the welt edge of every island as line segments.
+        var weltSegments = new List<int>[componentCount];
+        for (int c = 0; c < componentCount; c++) weltSegments[c] = new List<int>();
 
-        var heap = new MinHeap(256);
-        for (int i = 0; i < vertCount; i++)
+        foreach (KeyValuePair<long, int> kv in edgeUse)
         {
-            if (!onBoundary[i]) continue;
-            if (Find(loopParent, i) != bestLoop[component[i]]) continue;
-            dist[i] = 0f;
-            heap.Push(0f, i);
+            if (kv.Value != 1) continue;
+            int a = (int)(kv.Key >> 32);
+            int b = (int)(kv.Key & 0xFFFFFFFFL);
+            int c = component[a];
+            if (Find(loopParent, a) != bestLoop[c]) continue;
+            weltSegments[c].Add(a);
+            weltSegments[c].Add(b);
         }
 
-        while (heap.Count > 0)
+        // Straight-line distance from every vertex to the nearest point on its
+        // island's welt edge. Following mesh edges instead would zigzag and
+        // give the band a ragged lower border.
+        float[] dist = new float[vertCount];
+        for (int i = 0; i < vertCount; i++)
         {
-            heap.Pop(out float d, out int v);
-            if (d > dist[v]) continue;
-            if (d > maxDistance) break;
+            dist[i] = float.MaxValue;
+            if (canon[i] != i) continue;
 
-            foreach (int n in canonAdj[v])
+            List<int> segments = weltSegments[component[i]];
+            float best = float.MaxValue;
+            for (int k = 0; k < segments.Count; k += 2)
             {
-                float nd = d + (positions[v] - positions[n]).magnitude * scale;
-                if (nd < dist[n])
-                {
-                    dist[n] = nd;
-                    heap.Push(nd, n);
-                }
+                float d = PointSegmentDistance(
+                    positions[i], positions[segments[k]], positions[segments[k + 1]]);
+                if (d < best) best = d;
             }
+
+            if (best != float.MaxValue) dist[i] = best * scale;
         }
 
         return dist;
+    }
+
+    private static float PointSegmentDistance(Vector3 p, Vector3 a, Vector3 b)
+    {
+        Vector3 ab = b - a;
+        float lengthSq = ab.sqrMagnitude;
+        float t = lengthSq > 1e-12f ? Mathf.Clamp01(Vector3.Dot(p - a, ab) / lengthSq) : 0f;
+        return (p - (a + ab * t)).magnitude;
     }
 
     private static void CountEdge(Dictionary<long, int> edgeUse, int a, int b)
@@ -992,65 +1013,6 @@ public class PantyhoseDenierBaker : MonoBehaviour
         }
 
         for (int i = 0; i < n; i++) values[i] = copy[i];
-    }
-
-    /// <summary>Small binary min-heap of (key, vertex) pairs for Dijkstra.</summary>
-    private class MinHeap
-    {
-        private float[] keys;
-        private int[] items;
-        public int Count { get; private set; }
-
-        public MinHeap(int capacity)
-        {
-            keys = new float[Mathf.Max(capacity, 16)];
-            items = new int[keys.Length];
-        }
-
-        public void Push(float key, int item)
-        {
-            if (Count == keys.Length)
-            {
-                System.Array.Resize(ref keys, keys.Length * 2);
-                System.Array.Resize(ref items, items.Length * 2);
-            }
-
-            int i = Count++;
-            while (i > 0)
-            {
-                int p = (i - 1) / 2;
-                if (keys[p] <= key) break;
-                keys[i] = keys[p];
-                items[i] = items[p];
-                i = p;
-            }
-            keys[i] = key;
-            items[i] = item;
-        }
-
-        public void Pop(out float key, out int item)
-        {
-            key = keys[0];
-            item = items[0];
-
-            Count--;
-            float lastKey = keys[Count];
-            int lastItem = items[Count];
-
-            int i = 0;
-            while (true)
-            {
-                int child = i * 2 + 1;
-                if (child >= Count) break;
-                if (child + 1 < Count && keys[child + 1] < keys[child]) child++;
-                if (keys[child] >= lastKey) break;
-                keys[i] = keys[child];
-                items[i] = items[child];
-                i = child;
-            }
-            keys[i] = lastKey;
-            items[i] = lastItem;
-        }
     }
 
     // Equality comparer that snaps positions to a small grid to tolerate
