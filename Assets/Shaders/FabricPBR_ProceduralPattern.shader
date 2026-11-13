@@ -48,7 +48,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         // Needs the StockingTension component on the same object. It measures
         // how much the fabric is stretched or squashed by the current pose.
         [Toggle(_LIVE_TENSION)] _LiveTension("Live Tension (needs StockingTension)", Float) = 0
-        _TensionSheerness("Tension Makes Sheerer (1 = physical)", Range(0, 3)) = 1.0
+        _TensionSheerness("Tension Makes Sheerer (1 = physical)", Range(0, 10)) = 1.0
         [Toggle] _TensionDebug("Debug View (red = stretched  blue = squashed)", Float) = 0
 
         [Header(Wrinkles  (needs Live Tension))]
