@@ -320,8 +320,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     float4 knit = SAMPLE_TEXTURE2D(_KnitDetailMap, sampler_KnitDetailMap,
                                                    IN.uv * _KnitTiling);
 
-                    // B = thread coverage, 0.5 = average density.
-                    knitDensity = lerp(1.0, knit.b * 2.0, _KnitDensityStrength);
+                    // B = thread coverage. It is divided by the texture's own
+                    // average (read from the smallest mip), so turning the
+                    // detail on never changes the overall sheerness, whatever
+                    // the average of the texture is. Needs mip maps.
+                    float knitAverage = SAMPLE_TEXTURE2D_LOD(_KnitDetailMap, sampler_KnitDetailMap,
+                                                             float2(0.5, 0.5), 16.0).b;
+                    knitDensity = lerp(1.0, knit.b / max(knitAverage, 0.05),
+                                       _KnitDensityStrength);
 
                     float2 nXY = (knit.rg * 2.0 - 1.0) * _KnitNormalStrength;
                     float  nZ  = sqrt(saturate(1.0 - dot(nXY, nXY)));
