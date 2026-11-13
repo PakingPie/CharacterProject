@@ -59,6 +59,18 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _HighlightIntensity("Highlight Intensity", Range(0, 2)) = 0.1
         _HighlightRoughness("Highlight Roughness", Range(0.2, 1)) = 0.55
 
+        [Header(Pearl and Glints)]
+        // Pearl: a soft grainy shimmer. Glints: sparse sparkles that twinkle
+        // when the light or camera moves. Both are fixed to the UVs.
+        _PearlColor("Pearl Color", Color) = (1, 0.95, 0.9, 1)
+        _PearlStrength("Pearl Strength", Range(0, 2)) = 0.2
+        _PearlRandomness("Pearl Grain Contrast", Range(0, 1)) = 0.5
+        _PearlEdge("Pearl Towards Edge", Range(0, 1)) = 0.5
+        _PearlGrainScale("Grain Scale (grains per UV)", Float) = 600
+        _GlintStrength("Glint Strength", Range(0, 5)) = 0.5
+        _GlintDensity("Glint Density", Range(0, 1)) = 0.1
+        _GlintSharpness("Glint Sharpness", Range(20, 600)) = 200
+
         [Header(Knit Detail  (close ups only))]
         [Toggle] _UseKnitDetail("Use Knit Detail Texture", Float) = 0
         // Import with sRGB OFF and mip maps ON.
@@ -141,6 +153,15 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float4 _HighlightColor;
                 float  _HighlightIntensity;
                 float  _HighlightRoughness;
+
+                float4 _PearlColor;
+                float  _PearlStrength;
+                float  _PearlRandomness;
+                float  _PearlEdge;
+                float  _PearlGrainScale;
+                float  _GlintStrength;
+                float  _GlintDensity;
+                float  _GlintSharpness;
 
                 float  _UseKnitDetail;
                 float  _KnitTiling;
@@ -292,6 +313,57 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 return lobe * alphaSq * saturate(dot(N, L));
             }
 
+            // ── Pearl grain and glints ───────────────────
+            // The surface is divided into a grid of grains fixed to the UVs.
+            // Every grain has a random brightness (pearl) and some grains
+            // carry a tiny tilted mirror (glint). Two grid sizes are blended
+            // so a grain never gets smaller than about two pixels: there is
+            // nothing to alias, and the sparkle stays visible at any distance.
+
+            float3 GrainHash(float2 p)
+            {
+                float3 p3 = frac(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
+                p3 += dot(p3, p3.yxz + 33.33);
+                return frac((p3.xxy + p3.yzz) * p3.zyx);
+            }
+
+            struct GrainLayer
+            {
+                float  brightness;  // random 0..1 per grain
+                float  glintMask;   // 1 inside a grain that carries a glint
+                float3 glintNormal; // world-space normal of that glint
+            };
+
+            GrainLayer EvaluateGrainLayer(float2 gridUV, float3 N, float3 T, float3 B)
+            {
+                float2 cell  = floor(gridUV);
+                float2 local = frac(gridUV) - 0.5;
+
+                float3 hA = GrainHash(cell);
+                float3 hB = GrainHash(cell + 71.7);
+
+                GrainLayer g;
+                g.brightness = hA.x;
+
+                // Round dot, slightly off-centre, only in some grains.
+                float d = length(local - (hB.yz - 0.5) * 0.4);
+                float dotMask = 1.0 - smoothstep(0.15, 0.3, d);
+                g.glintMask = dotMask * step(hB.x, _GlintDensity);
+
+                // Random tilt, so each glint lights up at its own angle.
+                float2 tilt = (hA.yz * 2.0 - 1.0) * 0.4;
+                g.glintNormal = normalize(N + T * tilt.x + B * tilt.y);
+                return g;
+            }
+
+            float GlintLobe(GrainLayer g0, GrainLayer g1, float blend, float3 V, float3 L)
+            {
+                float3 H = SafeNormalize(V + L);
+                float a = g0.glintMask * pow(saturate(dot(g0.glintNormal, H)), _GlintSharpness);
+                float b = g1.glintMask * pow(saturate(dot(g1.glintNormal, H)), _GlintSharpness);
+                return lerp(a, b, blend);
+            }
+
             // ──────────────────────────────────────────────
             // Fragment Shader
             // ──────────────────────────────────────────────
@@ -419,6 +491,23 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 bodyLight  = ambient * _AmbientIntensity + inputData.vertexLighting;
                 float3 sheenLight = ambient * _SheenAmbient;
                 float3 highlight  = 0;
+                float3 glint      = 0;
+
+                // Grain grid: pick the two grid sizes around "two pixels per grain".
+                float2 grainUV = IN.uv * _PearlGrainScale;
+                float  grainsPerPixel = max(length(ddx(grainUV)), length(ddy(grainUV)));
+                float  grainLod   = max(log2(max(grainsPerPixel * 2.0, 1e-6)), 0.0);
+                float  grainLevel = floor(grainLod);
+                float  grainBlend = grainLod - grainLevel;
+
+                float3 tangentWS   = normalize(IN.tangentWS.xyz);
+                float3 bitangentWS = normalize(IN.bitangentWS.xyz);
+
+                GrainLayer grain0 = EvaluateGrainLayer(grainUV / exp2(grainLevel),
+                                                       geomNormalWS, tangentWS, bitangentWS);
+                GrainLayer grain1 = EvaluateGrainLayer(grainUV / exp2(grainLevel + 1.0),
+                                                       geomNormalWS, tangentWS, bitangentWS);
+                float grainBrightness = lerp(grain0.brightness, grain1.brightness, grainBlend);
 
                 // ══════════════════════════════════════════
                 //  MAIN LIGHT
@@ -436,6 +525,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 highlight  += mainLight.color * mainLight.shadowAttenuation
                             * SoftHighlight(detailNormalWS, viewDirWS,
                                             mainLight.direction, hlAlphaSq);
+                glint      += mainLight.color * mainLight.shadowAttenuation
+                            * saturate(dot(geomNormalWS, mainLight.direction))
+                            * GlintLobe(grain0, grain1, grainBlend,
+                                        viewDirWS, mainLight.direction);
 
                 // ══════════════════════════════════════════
                 //  ADDITIONAL LIGHTS
@@ -465,6 +558,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 highlight  += lightRad * light.shadowAttenuation
                             * SoftHighlight(detailNormalWS, viewDirWS,
                                             light.direction, hlAlphaSq);
+                glint      += lightRad * light.shadowAttenuation
+                            * saturate(dot(geomNormalWS, light.direction))
+                            * GlintLobe(grain0, grain1, grainBlend,
+                                        viewDirWS, light.direction);
                 LIGHT_LOOP_END
 
                 // ══════════════════════════════════════════
@@ -474,6 +571,15 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 float3 gloss = _SheenColor.rgb * _SheenIntensity * rim * sheenLight
                              + _HighlightColor.rgb * _HighlightIntensity * highlight;
+
+                // Pearl: soft light broken into grains, optionally pushed
+                // towards the silhouette. Averages to _PearlStrength.
+                float pearlGrain = lerp(1.0, grainBrightness * 2.0, _PearlRandomness);
+                float pearlView  = lerp(1.0, (1.0 - novG) * (1.0 - novG), _PearlEdge);
+                gloss += _PearlColor.rgb * _PearlStrength * pearlGrain * pearlView * sheenLight;
+
+                // Glints: small bright sparkles.
+                gloss += _PearlColor.rgb * _GlintStrength * glint;
 
                 // Fog. MixFog(x) = lerp(fogColor, x, k); subtracting MixFog(0)
                 // leaves x * k, so the additive gloss does not add fog twice.
