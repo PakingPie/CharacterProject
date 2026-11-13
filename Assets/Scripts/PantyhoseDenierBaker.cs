@@ -140,6 +140,17 @@ public class PantyhoseDenierBaker : MonoBehaviour
     [Range(0, 8)]
     public int zoneSmoothingPasses = 2;
 
+    [Header("Density Mask Texture")]
+    [Tooltip("Also bakes the dense zones into a texture and assigns it to the\n" +
+             "material's Density Mask slot. The zones are computed per pixel, so\n" +
+             "their borders are sharp even on a low-poly mesh. Needs UVs that do\n" +
+             "not overlap.")]
+    public bool bakeDensityMaskTexture = true;
+
+    [Tooltip("Width and height of the mask texture in pixels.")]
+    [Range(128, 2048)]
+    public int maskResolution = 1024;
+
     // ─── Stretch (Green channel) ─────────────────────────────────────────────
     [Header("Stretch (Green Channel)")]
     public DenierStretchMode stretchMode = DenierStretchMode.SyntheticCircumferenceStretch;
@@ -273,12 +284,13 @@ public class PantyhoseDenierBaker : MonoBehaviour
         // ── Red: dense zones ─────────────────────────────────────────────────
         float[] dense = new float[vertCount];
         int weltLoops = 0;
+        List<int>[] weltSegments = null;
 
         if (weltDensity > 0f && weltWidth > 0f)
         {
             float[] weltDist = ComputeWeltDistance(
                 vertices, scale, triangles, canon, component, componentCount, h,
-                out weltLoops);
+                out weltLoops, out weltSegments);
 
             for (int i = 0; i < vertCount; i++)
             {
@@ -406,14 +418,255 @@ public class PantyhoseDenierBaker : MonoBehaviour
         EditorUtility.SetDirty(targetMesh);
         AssetDatabase.SaveAssets();
 
+        string maskInfo = "off";
+        if (bakeDensityMaskTexture)
+        {
+            maskInfo = BakeDensityMask(
+                targetMesh, vertices, triangles, sourceMesh.uv, scale, up, forward,
+                leg, component, legMinH, legTipF, legRearF, weltSegments);
+        }
+
         float tallest = 0f;
         for (int l = 0; l < legCount; l++)
             tallest = Mathf.Max(tallest, legMaxH[l] - legMinH[l]);
 
         Debug.Log(
             $"[DenierBaker] Done on '{targetMesh.name}'. Legs: {legCount} ({legInfo}), " +
-            $"leg height {tallest:F2} m, welt edges found: {weltLoops}, stretch: {stretchInfo}.",
+            $"leg height {tallest:F2} m, welt edges found: {weltLoops}, stretch: {stretchInfo}, " +
+            $"mask texture: {maskInfo}.",
             this);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Density mask texture
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Dense-zone value (0..1) at any point on the surface. Same rules as the
+    /// per-vertex bake, but usable per pixel.
+    /// </summary>
+    private float EvaluateDenseAt(
+        Vector3 meshPosition, Vector3[] vertices, float scale, Vector3 up, Vector3 forward,
+        float minHeight, float tipForward, float rearForward, List<int> weltEdge)
+    {
+        Vector3 p = meshPosition * scale;
+        float height = Vector3.Dot(p, up) - minHeight;
+        float along = Vector3.Dot(p, forward);
+        float dense = 0f;
+
+        if (weltDensity > 0f && weltWidth > 0f && weltEdge != null && weltEdge.Count > 0)
+        {
+            float best = float.MaxValue;
+            for (int k = 0; k < weltEdge.Count; k += 2)
+            {
+                float d = PointSegmentDistance(
+                    meshPosition, vertices[weltEdge[k]], vertices[weltEdge[k + 1]]);
+                if (d < best) best = d;
+            }
+
+            float m = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(weltWidth, weltWidth + zoneFeather, best * scale));
+            dense = Mathf.Max(dense, m * weltDensity);
+        }
+
+        if (tipForward != float.MinValue)
+        {
+            float foot = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(footHeight, footHeight + zoneFeather, height));
+
+            if (toeDensity > 0f && toeLength > 0f)
+            {
+                float m = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(toeLength, toeLength + zoneFeather, tipForward - along));
+                dense = Mathf.Max(dense, m * foot * toeDensity);
+            }
+
+            if (heelDensity > 0f && heelLength > 0f)
+            {
+                float mLen = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(heelLength, heelLength + zoneFeather, along - rearForward));
+                float mHgt = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(heelHeight, heelHeight + zoneFeather, height));
+                dense = Mathf.Max(dense, mLen * mHgt * heelDensity);
+            }
+        }
+
+        return Mathf.Clamp01(dense);
+    }
+
+    /// <summary>
+    /// Draws every triangle into UV space and evaluates the dense zones for
+    /// each pixel it covers. Saves the result as a PNG next to the mesh and
+    /// assigns it to the stocking material. Returns a short status text.
+    /// </summary>
+    private string BakeDensityMask(
+        Mesh targetMesh, Vector3[] vertices, int[] triangles, Vector2[] uv,
+        float scale, Vector3 up, Vector3 forward,
+        int[] leg, int[] component, float[] legMinH, float[] legTipF, float[] legRearF,
+        List<int>[] weltSegments)
+    {
+        if (uv == null || uv.Length != vertices.Length)
+        {
+            Debug.LogWarning("[DenierBaker] The mesh has no UVs, so no mask texture was baked.", this);
+            return "skipped (no UVs)";
+        }
+
+        int size = Mathf.Clamp(maskResolution, 128, 2048);
+        float[] mask = new float[size * size];
+        bool[] filled = new bool[size * size];
+
+        int triangleCount = triangles.Length / 3;
+        for (int t = 0; t < triangleCount; t++)
+        {
+            if ((t & 255) == 0)
+            {
+                EditorUtility.DisplayProgressBar("Bake Density Mask",
+                    "Drawing dense zones into the texture", (float)t / triangleCount);
+            }
+
+            int i0 = triangles[t * 3];
+            int i1 = triangles[t * 3 + 1];
+            int i2 = triangles[t * 3 + 2];
+
+            Vector2 a = uv[i0] * size;
+            Vector2 b = uv[i1] * size;
+            Vector2 c = uv[i2] * size;
+
+            float area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            if (Mathf.Abs(area) < 1e-8f)
+                continue;
+
+            int minX = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x, Mathf.Min(b.x, c.x))), 0, size - 1);
+            int maxX = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x, Mathf.Max(b.x, c.x))), 0, size - 1);
+            int minY = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y, Mathf.Min(b.y, c.y))), 0, size - 1);
+            int maxY = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y, Mathf.Max(b.y, c.y))), 0, size - 1);
+
+            int legIndex = leg[i0];
+            List<int> weltEdge = weltSegments != null ? weltSegments[component[i0]] : null;
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    float px = x + 0.5f;
+                    float py = y + 0.5f;
+
+                    // Barycentric weights of the pixel centre.
+                    float w0 = ((b.x - px) * (c.y - py) - (b.y - py) * (c.x - px)) / area;
+                    float w1 = ((c.x - px) * (a.y - py) - (c.y - py) * (a.x - px)) / area;
+                    float w2 = 1f - w0 - w1;
+
+                    // Small tolerance so pixels on shared edges are not missed.
+                    if (w0 < -0.02f || w1 < -0.02f || w2 < -0.02f)
+                        continue;
+
+                    Vector3 position = vertices[i0] * w0 + vertices[i1] * w1 + vertices[i2] * w2;
+                    float value = EvaluateDenseAt(
+                        position, vertices, scale, up, forward,
+                        legMinH[legIndex], legTipF[legIndex], legRearF[legIndex], weltEdge);
+
+                    int index = y * size + x;
+                    if (!filled[index] || value > mask[index])
+                        mask[index] = value;
+                    filled[index] = true;
+                }
+            }
+        }
+
+        // Spread the edge pixels outwards a little, so texture filtering does
+        // not pull in empty pixels at UV seams.
+        for (int pass = 0; pass < 4; pass++)
+        {
+            bool[] nextFilled = (bool[])filled.Clone();
+            float[] nextMask = (float[])mask.Clone();
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int index = y * size + x;
+                    if (filled[index]) continue;
+
+                    float best = -1f;
+                    if (x > 0 && filled[index - 1]) best = Mathf.Max(best, mask[index - 1]);
+                    if (x < size - 1 && filled[index + 1]) best = Mathf.Max(best, mask[index + 1]);
+                    if (y > 0 && filled[index - size]) best = Mathf.Max(best, mask[index - size]);
+                    if (y < size - 1 && filled[index + size]) best = Mathf.Max(best, mask[index + size]);
+
+                    if (best >= 0f)
+                    {
+                        nextMask[index] = best;
+                        nextFilled[index] = true;
+                    }
+                }
+            }
+
+            filled = nextFilled;
+            mask = nextMask;
+        }
+
+        EditorUtility.ClearProgressBar();
+
+        Color32[] pixels = new Color32[size * size];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            byte v = (byte)Mathf.RoundToInt(Mathf.Clamp01(mask[i]) * 255f);
+            pixels[i] = new Color32(v, v, v, 255);
+        }
+
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGB24, false, true);
+        texture.SetPixels32(pixels);
+        byte[] png = texture.EncodeToPNG();
+        DestroyImmediate(texture);
+
+        // Same file every bake, so the material keeps pointing at it.
+        string folder = "Assets";
+        string meshPath = AssetDatabase.GetAssetPath(targetMesh);
+        if (!string.IsNullOrEmpty(meshPath) && meshPath.StartsWith("Assets/"))
+        {
+            int slash = meshPath.LastIndexOf('/');
+            if (slash > 0) folder = meshPath.Substring(0, slash);
+        }
+
+        string texturePath = folder + "/" + targetMesh.name + "_DensityMask.png";
+        System.IO.File.WriteAllBytes(texturePath, png);
+        AssetDatabase.ImportAsset(texturePath);
+
+        TextureImporter importer = AssetImporter.GetAtPath(texturePath) as TextureImporter;
+        if (importer != null)
+        {
+            importer.sRGBTexture = false;
+            importer.mipmapEnabled = true;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+        }
+
+        Texture2D maskAsset = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+
+        // Assign it to every stocking material on this object.
+        Renderer targetRenderer = GetComponent<Renderer>();
+        int assigned = 0;
+        if (targetRenderer != null && maskAsset != null)
+        {
+            foreach (Material material in targetRenderer.sharedMaterials)
+            {
+                if (material == null || !material.HasProperty("_DensityMask"))
+                    continue;
+
+                Undo.RecordObject(material, "Assign Density Mask");
+                material.SetTexture("_DensityMask", maskAsset);
+                material.SetFloat("_UseDensityMask", 1f);
+
+                // The texture replaces the softer per-vertex zones.
+                if (material.HasProperty("_UseDenierFromVertexR"))
+                    material.SetFloat("_UseDenierFromVertexR", 0f);
+
+                EditorUtility.SetDirty(material);
+                assigned++;
+            }
+        }
+
+        return $"'{texturePath}' ({size} px), assigned to {assigned} material(s)";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -569,7 +822,7 @@ public class PantyhoseDenierBaker : MonoBehaviour
     private static float[] ComputeWeltDistance(
         Vector3[] positions, float scale, int[] tris, int[] canon,
         int[] component, int componentCount, float[] h,
-        out int weltLoopCount)
+        out int weltLoopCount, out List<int>[] weltSegmentsOut)
     {
         int vertCount = positions.Length;
 
@@ -670,6 +923,7 @@ public class PantyhoseDenierBaker : MonoBehaviour
             if (best != float.MaxValue) dist[i] = best * scale;
         }
 
+        weltSegmentsOut = weltSegments;
         return dist;
     }
 
