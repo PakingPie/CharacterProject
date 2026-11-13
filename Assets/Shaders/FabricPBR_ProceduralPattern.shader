@@ -88,6 +88,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         // Import with sRGB OFF and mip maps ON.
         [NoScaleOffset] _KnitDetailMap("Knit Detail (RG = normal XY, B = thread coverage)", 2D) = "gray" {}
         _KnitTiling("Knit Tiling", Float) = 200
+        // Use when the mesh UVs are stretched and the weave looks like lines.
+        _KnitAspect("Knit Vertical Stretch (1 = square)", Range(0.1, 10)) = 1.0
         _KnitDensityStrength("Knit Density Strength", Range(0, 1)) = 0.5
         _KnitNormalStrength("Knit Normal Strength", Range(0, 2)) = 0.5
 
@@ -186,6 +188,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 float  _UseKnitDetail;
                 float  _KnitTiling;
+                float  _KnitAspect;
                 float  _KnitDensityStrength;
                 float  _KnitNormalStrength;
 
@@ -453,8 +456,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 detailNormalWS = geomNormalWS;
                 if (_UseKnitDetail > 0)
                 {
-                    float4 knit = SAMPLE_TEXTURE2D(_KnitDetailMap, sampler_KnitDetailMap,
-                                                   IN.uv * _KnitTiling);
+                    float2 knitUV = IN.uv * _KnitTiling * float2(1.0, _KnitAspect);
+                    float4 knit = SAMPLE_TEXTURE2D(_KnitDetailMap, sampler_KnitDetailMap, knitUV);
 
                     // B = thread coverage. It is divided by the texture's own
                     // average (read from the smallest mip), so turning the
