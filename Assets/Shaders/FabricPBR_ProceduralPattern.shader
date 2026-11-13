@@ -316,9 +316,10 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             // ── Pearl grain and glints ───────────────────
             // The surface is divided into a grid of grains fixed to the UVs.
             // Every grain has a random brightness (pearl) and some grains
-            // carry a tiny tilted mirror (glint). Two grid sizes are blended
-            // so a grain never gets smaller than about two pixels: there is
-            // nothing to alias, and the sparkle stays visible at any distance.
+            // carry a tiny tilted mirror (glint). For glints, two grid sizes
+            // are blended so a grain never gets smaller than about two
+            // pixels: nothing aliases and the sparkle stays visible at any
+            // distance.
 
             float3 GrainHash(float2 p)
             {
@@ -327,9 +328,22 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 return frac((p3.xxy + p3.yzz) * p3.zyx);
             }
 
+            // Soft random brightness 0..1, blended between the four nearest
+            // grid points so grains are blobs, not squares.
+            float GrainBrightness(float2 gridUV)
+            {
+                float2 corner = floor(gridUV - 0.5);
+                float2 w = frac(gridUV - 0.5);
+                w = w * w * (3.0 - 2.0 * w);
+                float b00 = GrainHash(corner).x;
+                float b10 = GrainHash(corner + float2(1.0, 0.0)).x;
+                float b01 = GrainHash(corner + float2(0.0, 1.0)).x;
+                float b11 = GrainHash(corner + float2(1.0, 1.0)).x;
+                return lerp(lerp(b00, b10, w.x), lerp(b01, b11, w.x), w.y);
+            }
+
             struct GrainLayer
             {
-                float  brightness;  // random 0..1 per grain
                 float  glintMask;   // 1 inside a grain that carries a glint
                 float3 glintNormal; // world-space normal of that glint
             };
@@ -342,18 +356,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 hA = GrainHash(cell);
                 float3 hB = GrainHash(cell + 71.7);
 
-                // Brightness is blended smoothly between the four nearest
-                // grid points, so grains are soft blobs, not flat squares.
-                float2 corner = floor(gridUV - 0.5);
-                float2 w = frac(gridUV - 0.5);
-                w = w * w * (3.0 - 2.0 * w);
-                float b00 = GrainHash(corner).x;
-                float b10 = GrainHash(corner + float2(1.0, 0.0)).x;
-                float b01 = GrainHash(corner + float2(0.0, 1.0)).x;
-                float b11 = GrainHash(corner + float2(1.0, 1.0)).x;
-
                 GrainLayer g;
-                g.brightness = lerp(lerp(b00, b10, w.x), lerp(b01, b11, w.x), w.y);
 
                 // Round dot, slightly off-centre, only in some grains.
                 float d = length(local - (hB.yz - 0.5) * 0.4);
@@ -517,7 +520,13 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                                                        geomNormalWS, tangentWS, bitangentWS);
                 GrainLayer grain1 = EvaluateGrainLayer(grainUV / exp2(grainLevel + 1.0),
                                                        geomNormalWS, tangentWS, bitangentWS);
-                float grainBrightness = lerp(grain0.brightness, grain1.brightness, grainBlend);
+
+                // Pearl grain keeps its real size and fades to a smooth
+                // average once grains are smaller than a pixel, so it never
+                // shows as blotches at game distance. Only glints use the
+                // two-size grid above.
+                float pearlFade = 1.0 - smoothstep(0.35, 0.7, grainsPerPixel);
+                float grainBrightness = lerp(0.5, GrainBrightness(grainUV), pearlFade);
 
                 // ══════════════════════════════════════════
                 //  MAIN LIGHT
