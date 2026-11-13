@@ -4,6 +4,8 @@
     #define REQUIRES_WORLD_SPACE_POS_INTERPOLATOR
     #define REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR
 
+    #include "MyToonSceneLighting.hlsl"
+
     struct Varyings
     {
         float2 uv;
@@ -231,9 +233,11 @@
         half3 envColor = GetGlobalIllumination(brdfData, inputData.bakedGI, surfaceData.occlusion, inputData.normalWS, inputData.viewDirectionWS);
         envColor *= 1.8f;
 
-        float4 toonShadowCoord = 0;
-        #if defined(_MAIN_LIGHT_SHADOWS) && !defined(_RECEIVE_SHADOWS_OFF)
-            toonShadowCoord = i.shadowCoord;
+        // Select cascades per fragment; screen-space shadows use screen coordinates.
+        #if defined(_MAIN_LIGHT_SHADOWS_SCREEN)
+            float4 toonShadowCoord = ComputeScreenPos(i.positionCS);
+        #else
+            float4 toonShadowCoord = TransformWorldToShadowCoord(i.posWorld.xyz);
         #endif
         ToonLight mainLight = GetToonMainLightByID(i.mainLightID, i.posWorld.xyz, toonShadowCoord, i.positionCS);
         // This returns black due to mainlight.distanceAttenuation being 0, fixed by setting it to 1
@@ -255,6 +259,13 @@
         #elif defined(_CLIPPING_DISABLE) || defined(_DISABLE_TRANSCLIPPING)
             // No need implementation
         #endif
+
+        if (_SceneAwareLighting > 0.5)
+        {
+            return EvaluateSceneAwareToon(mainTexColor, uv, i.posWorld.xyz,
+                localNormal, normalDirection, viewDirection, toonShadowCoord,
+                inputData.normalizedScreenSpaceUV, inputData.fogCoord);
+        }
 
         float shadowAttenuation = 1.0;
 

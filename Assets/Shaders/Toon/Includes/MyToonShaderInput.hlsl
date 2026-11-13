@@ -171,8 +171,14 @@
         half _Metallic;
         half _Smoothness;
         half4 _SpecColor;
+        float _SceneAwareLighting, _SceneDirectScale, _SceneAmbientScale;
+        float _AlbedoFlatten, _AlbedoPreserveDark;
+        float4 _AlbedoFlatColor;
+        float _UseAuthoredFaceShadow, _FaceShadowFeather;
+        float4 _FaceExtents, _HeadForwardWS, _HeadRightWS, _HeadUpWS, _FaceOriginWS;
     CBUFFER_END
 
+    TEXTURE2D(_FaceShadowTex); SAMPLER(sampler_FaceShadowTex);
     TEXTURE2D(_MainTex);
     SAMPLER(sampler_MainTex);
     TEXTURE2D(_FirstShadowTex);

@@ -81,6 +81,9 @@ float4 frag(VertexOutput i) : SV_Target
     lightColor = lightColorIntensity < 1 ? lightColor : lightColor / lightColorIntensity;
     lightColor = lerp(half3(1.0, 1.0, 1.0), lightColor, _IsBlendLightColorToOutline);
 
+    if (_SceneAwareLighting > 0.5)
+        lightColor = saturate(_MainLightColor.rgb * _SceneDirectScale + max(SampleSH(normalize(i.normalDir)), 0) * _SceneAmbientScale);
+
     float2 uv = i.uv;
     float4 mainTexVal = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, TRANSFORM_TEX(uv, _MainTex));
     float3 baseCol = _BaseColor.rgb * mainTexVal.rgb;

@@ -15,7 +15,7 @@
         "com.unity.nuget.newtonsoft-json": "3.0.2",
         "com.unity.test-framework": "1.1.31"
       },
-      "hash": "bd72241ab91c664176091789c9408d676783abec"
+      "hash": "ed4e205d31a545bac3686d5e19210e67959aeddd"
     },
     "com.unity.ai.navigation": {
       "version": "2.0.13",

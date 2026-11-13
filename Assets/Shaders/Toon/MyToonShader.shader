@@ -194,6 +194,25 @@ Shader "Unlit/MyToonShader"
         [HideInInspector]_OffsetYAxisBLD (" Offset Y-Axis (Built-in Light Direction)", Range(-1, 1)) = 0.09
         [HideInInspector][Toggle(_)] _InverseZAxisBLD (" Inverse Z-Axis (Built-in Light Direction)", Float ) = 1
     
+        // Opt-in extension: existing materials retain the legacy rendering path.
+        [Header(Scene Aware Cel Lighting)]
+        [Enum(Off,0,On,1)] _ZWrite("Forward Depth Write", Float) = 1
+        [Toggle] _SceneAwareLighting("Scene Aware Lighting", Float) = 0
+        _SceneDirectScale("Direct Light Scale", Range(0,2)) = 1
+        _SceneAmbientScale("Shared Ambient Scale", Range(0,2)) = 1
+        _AlbedoFlatten("Reduce Painted Lighting", Range(0,1)) = 0
+        _AlbedoFlatColor("Clean Base Palette", Color) = (1,1,1,1)
+        _AlbedoPreserveDark("Preserve Dark Texture Marks", Range(0,1)) = 1
+        [Header(Authored Face Shadow)]
+        [Toggle] _UseAuthoredFaceShadow("Use Authored Face Shadow", Float) = 0
+        _FaceShadowTex("Face Sweep Mask (linear data)", 2D) = "white" {}
+        _FaceShadowFeather("Face Edge Feather", Range(0.0001,0.05)) = 0.003
+        _FaceExtents("Head Plane Half Width / Height", Vector) = (0.085,0.11,0,0)
+        _HeadForwardWS("Head Forward", Vector) = (0,0,1,0)
+        _HeadRightWS("Head Right", Vector) = (1,0,0,0)
+        _HeadUpWS("Head Up", Vector) = (0,1,0,0)
+        _FaceOriginWS("Eye Midpoint", Vector) = (0,1.34,0,0)
+
         [HideInInspector] _Metallic("Metallic", Range(0.0, 1.0)) = 0
         [HideInInspector] _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.5
         [HideInInspector] _SpecColor("Specular Color", Color) = (1, 1, 1, 1)
@@ -235,14 +254,14 @@ Shader "Unlit/MyToonShader"
         {
             Name "ForwardLit"
             Tags{"LightMode" = "UniversalForward"}
-            ZWrite On
+            ZWrite [_ZWrite]
             Cull Back
             Blend SrcAlpha OneMinusSrcAlpha
 
             HLSLPROGRAM
             #pragma prefer_hlslcc gles
             #pragma exclude_renderers d3d11_9x
-            #pragma target 2.0
+            #pragma target 3.5
 
             #pragma vertex vert
             #pragma fragment frag
@@ -260,11 +279,11 @@ Shader "Unlit/MyToonShader"
 
 
             // Pipeline Shadow-Related keywords
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
-            #pragma multi_compile _ADDITIONAL_LIGHTS _ADDITIONAL_LIGHTS_VERTEX 
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS _ADDITIONAL_LIGHTS_VERTEX
             #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
-            #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma multi_compile _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             
             #pragma multi_compile _ _MIXED_LIGHTING_SUBTRACTIVE
 
@@ -309,7 +328,7 @@ Shader "Unlit/MyToonShader"
             // Required to compile gles 2.0 with standard srp library
             #pragma prefer_hlslcc gles
             #pragma exclude_renderers d3d11_9x
-            #pragma target 2.0
+            #pragma target 3.5
 
             // -------------------------------------
             // Material Keywords
@@ -322,6 +341,7 @@ Shader "Unlit/MyToonShader"
 
             #pragma vertex ShadowPassVertex
             #pragma fragment ShadowPassFragment
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
             #include "./Includes/MyToonShaderInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
