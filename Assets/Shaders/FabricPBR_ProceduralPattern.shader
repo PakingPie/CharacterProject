@@ -342,8 +342,18 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float3 hA = GrainHash(cell);
                 float3 hB = GrainHash(cell + 71.7);
 
+                // Brightness is blended smoothly between the four nearest
+                // grid points, so grains are soft blobs, not flat squares.
+                float2 corner = floor(gridUV - 0.5);
+                float2 w = frac(gridUV - 0.5);
+                w = w * w * (3.0 - 2.0 * w);
+                float b00 = GrainHash(corner).x;
+                float b10 = GrainHash(corner + float2(1.0, 0.0)).x;
+                float b01 = GrainHash(corner + float2(0.0, 1.0)).x;
+                float b11 = GrainHash(corner + float2(1.0, 1.0)).x;
+
                 GrainLayer g;
-                g.brightness = hA.x;
+                g.brightness = lerp(lerp(b00, b10, w.x), lerp(b01, b11, w.x), w.y);
 
                 // Round dot, slightly off-centre, only in some grains.
                 float d = length(local - (hB.yz - 0.5) * 0.4);
