@@ -111,6 +111,21 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         [Toggle] _UseSkinTint("Tint Skin Through Fabric", Float) = 0
         _SkinTint("Skin Tint", Color) = (1, 1, 1, 1)
 
+        [Header(Tears)]
+        // The mask is painted and assigned by the StockingTear component.
+        // R = hole, G = run (ladder).
+        [Toggle] _UseTearMask("Use Tear Mask", Float) = 0
+        [NoScaleOffset] _TearMask("Tear Mask (R = hole, G = run)", 2D) = "black" {}
+        _TearRagged("Ragged Edge", Range(0, 1)) = 0.5
+        _TearNoiseScale("Ragged Edge Scale", Float) = 150
+        _TearRimWidth("Rolled Edge Width", Range(0, 0.4)) = 0.15
+        _TearRimDensity("Rolled Edge Density", Range(0, 4)) = 2.0
+        _TearTensionOpen("Opens Wider When Stretched", Range(0, 4)) = 1.0
+        _RunSheerness("Run Sheerness", Range(0, 1)) = 0.85
+        _RunThreadStrength("Run Cross Threads", Range(0, 1)) = 0.7
+        _RunThreadScale("Run Cross Threads per UV", Float) = 400
+        _RunThreadAngle("Run Thread Rotation (degrees)", Range(0, 180)) = 90
+
         [Header(Outline)]
         // Same unit as the toon shader's Outline Thickness. Make it at least
         // as wide as the leg's outline so it covers it.
@@ -129,6 +144,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
     HLSLINCLUDE
 
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+    TEXTURE2D(_TearMask);   SAMPLER(sampler_TearMask);
 
     CBUFFER_START(UnityPerMaterial)
         float4 _BaseColor;
@@ -191,12 +208,76 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         float  _UseSkinTint;
         float4 _SkinTint;
 
+        float  _UseTearMask;
+        float  _TearRagged;
+        float  _TearNoiseScale;
+        float  _TearRimWidth;
+        float  _TearRimDensity;
+        float  _TearTensionOpen;
+        float  _RunSheerness;
+        float  _RunThreadStrength;
+        float  _RunThreadScale;
+        float  _RunThreadAngle;
+
         float  _OutlineWidth;
         float4 _OutlineColor;
 
         float  _OffsetFactor;
         float  _OffsetUnits;
     CBUFFER_END
+
+    #ifdef _LIVE_TENSION
+        // One value per vertex, written every frame by StockingTension:
+        // current surface area / rest surface area. 1 = relaxed.
+        StructuredBuffer<float> _TensionBuffer;
+    #endif
+
+    float3 GrainHash(float2 p)
+    {
+        float3 p3 = frac(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
+        p3 += dot(p3, p3.yxz + 33.33);
+        return frac((p3.xxy + p3.yzz) * p3.zyx);
+    }
+
+    // Soft random brightness 0..1, blended between the four nearest
+    // grid points so grains are blobs, not squares.
+    float GrainBrightness(float2 gridUV)
+    {
+        float2 corner = floor(gridUV - 0.5);
+        float2 w = frac(gridUV - 0.5);
+        w = w * w * (3.0 - 2.0 * w);
+        float b00 = GrainHash(corner).x;
+        float b10 = GrainHash(corner + float2(1.0, 0.0)).x;
+        float b01 = GrainHash(corner + float2(0.0, 1.0)).x;
+        float b11 = GrainHash(corner + float2(1.0, 1.0)).x;
+        return lerp(lerp(b00, b10, w.x), lerp(b01, b11, w.x), w.y);
+    }
+
+    // Tears, from the mask painted by StockingTear.
+    //   x = 1 inside a hole
+    //   y = 1 on the rolled edge around a hole
+    //   z = 1 inside a run (ladder)
+    // The mask holds soft blobs; noise makes hole borders ragged, and
+    // stretched fabric pulls a hole wider.
+    float3 EvaluateTear(float2 uv, float tension)
+    {
+        float2 mask = SAMPLE_TEXTURE2D(_TearMask, sampler_TearMask, uv).rg;
+
+        float noise = GrainBrightness(uv * _TearNoiseScale) * 0.65
+                    + GrainBrightness(uv * _TearNoiseScale * 2.7 + 19.1) * 0.35;
+
+        float opened = mask.r * (1.0 + max(tension - 1.0, 0.0) * _TearTensionOpen);
+
+        // Noise only acts where the mask is present, so it cannot open
+        // holes in untouched fabric.
+        float value = opened + (noise - 0.5) * _TearRagged * saturate(mask.r * 4.0);
+
+        float soft = max(fwidth(value), 0.01);
+        float hole = smoothstep(0.5 - soft, 0.5 + soft, value);
+        float rim  = smoothstep(0.5 - _TearRimWidth - soft, 0.5, value) * (1.0 - hole);
+        float run  = smoothstep(0.25, 0.6, mask.g) * (1.0 - hole);
+        return float3(hole, rim, run);
+    }
 
     ENDHLSL
 
@@ -245,12 +326,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             TEXTURE2D(_DensityMask);    SAMPLER(sampler_DensityMask);
             TEXTURE2D(_KnitDetailMap);  SAMPLER(sampler_KnitDetailMap);
             TEXTURE2D(_WrinkleMap);     SAMPLER(sampler_WrinkleMap);
-
-            #ifdef _LIVE_TENSION
-                // One value per vertex, written every frame by StockingTension:
-                // current surface area / rest surface area. 1 = relaxed.
-                StructuredBuffer<float> _TensionBuffer;
-            #endif
 
             // ── Structs ──────────────────────────────────
             struct Attributes
@@ -432,27 +507,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             // pixels: nothing aliases and the sparkle stays visible at any
             // distance.
 
-            float3 GrainHash(float2 p)
-            {
-                float3 p3 = frac(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
-                p3 += dot(p3, p3.yxz + 33.33);
-                return frac((p3.xxy + p3.yzz) * p3.zyx);
-            }
-
-            // Soft random brightness 0..1, blended between the four nearest
-            // grid points so grains are blobs, not squares.
-            float GrainBrightness(float2 gridUV)
-            {
-                float2 corner = floor(gridUV - 0.5);
-                float2 w = frac(gridUV - 0.5);
-                w = w * w * (3.0 - 2.0 * w);
-                float b00 = GrainHash(corner).x;
-                float b10 = GrainHash(corner + float2(1.0, 0.0)).x;
-                float b01 = GrainHash(corner + float2(0.0, 1.0)).x;
-                float b11 = GrainHash(corner + float2(1.0, 1.0)).x;
-                return lerp(lerp(b00, b10, w.x), lerp(b01, b11, w.x), w.y);
-            }
-
             struct GrainLayer
             {
                 float  glintMask;   // 1 inside a grain that carries a glint
@@ -614,13 +668,41 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
                 tau *= knitDensity;
 
+                // ══════════════════════════════════════════
+                // Tears
+                // ══════════════════════════════════════════
+                float tearHole = 0.0;
+                if (_UseTearMask > 0)
+                {
+                    float3 tear = EvaluateTear(IN.uv, tension);
+                    tearHole = tear.x;
+
+                    // The fabric rolls up into a denser edge around a hole.
+                    tau *= 1.0 + tear.y * _TearRimDensity;
+
+                    // A run: most of the yarn is gone, thin cross threads remain.
+                    float  threadAngle = radians(_RunThreadAngle);
+                    float  threadCoord = dot(IN.uv, float2(cos(threadAngle), sin(threadAngle)))
+                                       * _RunThreadScale;
+                    float  threadWidth = 0.3;
+                    float  threadSoft  = fwidth(threadCoord) * 2.0;
+                    float  fromCentre  = abs(frac(threadCoord) - 0.5) * 2.0;
+                    float  thread = 1.0 - smoothstep(threadWidth - threadSoft,
+                                                     threadWidth + threadSoft, fromCentre);
+                    // Too small to resolve: use the average thread coverage.
+                    thread = lerp(thread, threadWidth, saturate(threadSoft - 0.5));
+
+                    float runDensity = lerp(1.0 - _RunSheerness, 1.0, thread * _RunThreadStrength);
+                    tau *= lerp(1.0, runDensity, tear.z);
+                }
+
                 // Light travels through more fabric at grazing angles.
                 float pathLength = lerp(1.0,
                                         1.0 / max(novG, _GrazingLimit),
                                         _ViewDependence);
 
                 float transmittance = exp(-tau * pathLength);
-                float alpha = 1.0 - transmittance;
+                float alpha = (1.0 - transmittance) * (1.0 - tearHole);
 
                 // ══════════════════════════════════════════
                 // Lighting setup
@@ -817,15 +899,25 @@ Shader "Custom/FabricPBR_ProceduralPattern"
             #pragma fragment TintFrag
             #pragma multi_compile_instancing
 
+            // Same tension input as ForwardLit, so holes match in both passes.
+            #pragma target 4.5
+            #pragma shader_feature_local _LIVE_TENSION
+
             struct TintAttributes
             {
                 float4 positionOS : POSITION;
+                float2 texcoord   : TEXCOORD0;
+                #ifdef _LIVE_TENSION
+                    uint vertexID : SV_VertexID;
+                #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct TintVaryings
             {
                 float4 positionCS : SV_POSITION;
+                float2 uv         : TEXCOORD0;
+                float  tension    : TEXCOORD1;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -834,6 +926,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 TintVaryings OUT = (TintVaryings)0;
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+
+                OUT.uv = IN.texcoord;
+
+                OUT.tension = 1.0;
+                #ifdef _LIVE_TENSION
+                    float tensionValue = _TensionBuffer[IN.vertexID];
+                    OUT.tension = tensionValue > 0.0 ? tensionValue : 1.0;
+                #endif
 
                 // Switched off: collapse every triangle so nothing is drawn.
                 OUT.positionCS = _UseSkinTint > 0
@@ -844,7 +944,16 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
             float4 TintFrag(TintVaryings IN) : SV_Target
             {
-                return float4(max(_SkinTint.rgb, 0.05), 1.0);
+                float3 tint = max(_SkinTint.rgb, 0.05);
+
+                // Skin seen through a hole is bare, so it is not tinted.
+                if (_UseTearMask > 0)
+                {
+                    float tension = clamp(IN.tension, 0.25, 4.0);
+                    tint = lerp(tint, (float3)1.0, EvaluateTear(IN.uv, tension).x);
+                }
+
+                return float4(tint, 1.0);
             }
             ENDHLSL
         }
