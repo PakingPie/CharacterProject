@@ -53,11 +53,15 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
         [Header(Wrinkles  (needs Live Tension))]
         // Folds appear where the fabric is squashed, such as behind a bent knee.
-        _WrinkleStrength("Wrinkle Strength (0 = off)", Range(0, 2)) = 0.6
-        _WrinkleDensity("Wrinkle Darkening", Range(0, 1)) = 0.5
+        [Toggle] _UseWrinkleMap("Use Wrinkle Texture", Float) = 0
+        // Same packing as the knit detail. Import with sRGB OFF, mip maps ON,
+        // Texture Type Default (not Normal map).
+        [NoScaleOffset] _WrinkleMap("Wrinkle Map (RG = normal XY, B = fold height)", 2D) = "bump" {}
+        _WrinkleTiling("Wrinkle Tiling", Float) = 20
+        _WrinkleAngle("Wrinkle Rotation (degrees)", Range(0, 180)) = 0
+        _WrinkleStrength("Wrinkle Strength", Range(0, 2)) = 0.6
+        _WrinkleDensity("Wrinkle Darkening", Range(0, 1)) = 0.3
         _WrinkleSensitivity("Wrinkle Sensitivity", Range(1, 10)) = 4.0
-        _WrinkleScale("Wrinkle Scale (folds per UV)", Float) = 80
-        _WrinkleAngle("Fold Direction (degrees)", Range(0, 180)) = 0
 
         [Header(Toon Shading)]
         _ShadeColor("Shade Tint (multiplies fabric color)", Color) = (0.55, 0.5, 0.6, 1)
@@ -150,6 +154,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
 
             TEXTURE2D(_DensityMask);    SAMPLER(sampler_DensityMask);
             TEXTURE2D(_KnitDetailMap);  SAMPLER(sampler_KnitDetailMap);
+            TEXTURE2D(_WrinkleMap);     SAMPLER(sampler_WrinkleMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
@@ -172,7 +177,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float  _WrinkleStrength;
                 float  _WrinkleDensity;
                 float  _WrinkleSensitivity;
-                float  _WrinkleScale;
+                float  _WrinkleTiling;
+                float  _UseWrinkleMap;
                 float  _WrinkleAngle;
 
                 float4 _ShadeColor;
@@ -437,22 +443,6 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 return g;
             }
 
-            // ── Wrinkles ─────────────────────────────────
-            // Height of the fold pattern, 0..1, ridges near 1. Folds are long
-            // along p.x and repeat along p.y, with a slow wave so they do
-            // not look ruled.
-            float WrinkleHeight(float2 p)
-            {
-                float2 q = float2(p.x * 0.12, p.y);
-                q.y += (GrainBrightness(q * float2(1.0, 0.35) + 31.7) - 0.5) * 1.2;
-
-                float a = GrainBrightness(q);
-                float b = GrainBrightness(q * 2.17 + 11.3);
-                float ridgeA = 1.0 - abs(a * 2.0 - 1.0);
-                float ridgeB = 1.0 - abs(b * 2.0 - 1.0);
-                return ridgeA * ridgeA * 0.7 + ridgeB * ridgeB * 0.3;
-            }
-
             float GlintLobe(GrainLayer g0, GrainLayer g1, float blend, float3 V, float3 L)
             {
                 float3 H = SafeNormalize(V + L);
@@ -554,30 +544,30 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // unless wrinkles tilt it.
                 float3 lightNormalWS = geomNormalWS;
 
-                float  wrinkleAngle = radians(_WrinkleAngle);
-                float2 wrinkleAxisX = float2(cos(wrinkleAngle), sin(wrinkleAngle));
-                float2 wrinkleAxisY = float2(-wrinkleAxisX.y, wrinkleAxisX.x);
-                float2 wrinkleUV = float2(dot(IN.uv, wrinkleAxisX), dot(IN.uv, wrinkleAxisY))
-                                 * _WrinkleScale;
-
-                // Fade out before folds get thinner than a pixel.
-                float wrinkleFootprint = max(length(ddx(wrinkleUV)), length(ddy(wrinkleUV)));
-                float wrinkleAmount = saturate((1.0 - tension) * _WrinkleSensitivity)
-                                    * (1.0 - smoothstep(0.3, 0.8, wrinkleFootprint))
-                                    * step(0.0001, _WrinkleStrength);
-
-                if (wrinkleAmount > 0.001)
+                if (_UseWrinkleMap > 0)
                 {
-                    const float wrinkleStep = 0.1;
-                    float height     = WrinkleHeight(wrinkleUV);
-                    float heightNext = WrinkleHeight(wrinkleUV + float2(0.0, wrinkleStep));
+                    float wrinkleAmount = saturate((1.0 - tension) * _WrinkleSensitivity);
 
-                    // Bunched fabric is denser on the ridges, thinner between.
-                    tau *= max(1.0 + (height - 0.35) * 2.0 * _WrinkleDensity * wrinkleAmount, 0.2);
+                    float  wrinkleAngle = radians(_WrinkleAngle);
+                    float2 wrinkleAxisX = float2(cos(wrinkleAngle), sin(wrinkleAngle));
+                    float2 wrinkleAxisY = float2(-wrinkleAxisX.y, wrinkleAxisX.x);
+                    float2 wrinkleUV = float2(dot(IN.uv, wrinkleAxisX), dot(IN.uv, wrinkleAxisY))
+                                     * _WrinkleTiling;
 
-                    // Tilt the normal across the folds.
-                    float slope = (heightNext - height) / wrinkleStep;
-                    float2 tiltUV = -wrinkleAxisY * slope * _WrinkleStrength * wrinkleAmount;
+                    float4 wrinkle = SAMPLE_TEXTURE2D(_WrinkleMap, sampler_WrinkleMap, wrinkleUV);
+
+                    // Fold height relative to the texture's own average (its
+                    // smallest mip), so wrinkles never change the overall
+                    // sheerness: ridges get denser, valleys thinner.
+                    float wrinkleAverage = SAMPLE_TEXTURE2D_LOD(_WrinkleMap, sampler_WrinkleMap,
+                                                                float2(0.5, 0.5), 16.0).b;
+                    float heightRatio = wrinkle.b / max(wrinkleAverage, 0.05);
+                    tau *= max(1.0 + (heightRatio - 1.0) * _WrinkleDensity * wrinkleAmount, 0.2);
+
+                    // Tilt the normal. The map is in the rotated frame, so
+                    // turn it back into the mesh's tangent frame.
+                    float2 mapXY  = (wrinkle.rg * 2.0 - 1.0) * _WrinkleStrength * wrinkleAmount;
+                    float2 tiltUV = wrinkleAxisX * mapXY.x + wrinkleAxisY * mapXY.y;
                     float3 tiltWS = normalize(IN.tangentWS.xyz)   * tiltUV.x
                                   + normalize(IN.bitangentWS.xyz) * tiltUV.y;
 
