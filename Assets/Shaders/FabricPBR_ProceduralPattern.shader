@@ -207,6 +207,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float  _GlintSharpness;
 
                 float  _UseKnitDetail;
+                float4 _KnitDetailMap_TexelSize;
+                float4 _WrinkleMap_TexelSize;
                 float  _KnitTiling;
                 float  _KnitAspect;
                 float  _KnitDensityStrength;
@@ -344,6 +346,13 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     inputData.bakedGI    = SAMPLE_GI(IN.staticLightmapUV, IN.vertexSH, inputData.normalWS);
                     inputData.shadowMask = SAMPLE_SHADOWMASK(IN.staticLightmapUV);
                 #endif
+            }
+
+            // Index of a texture's smallest mip (1x1), from its size in pixels.
+            // Sampling it gives the average of the whole texture.
+            float SmallestMip(float4 texelSize)
+            {
+                return log2(max(max(texelSize.z, texelSize.w), 1.0));
             }
 
             // ── Lighting helpers ─────────────────────────
@@ -484,7 +493,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     // detail on never changes the overall sheerness, whatever
                     // the average of the texture is. Needs mip maps.
                     float knitAverage = SAMPLE_TEXTURE2D_LOD(_KnitDetailMap, sampler_KnitDetailMap,
-                                                             float2(0.5, 0.5), 16.0).b;
+                        float2(0.5, 0.5), SmallestMip(_KnitDetailMap_TexelSize)).b;
                     knitDensity = lerp(1.0, knit.b / max(knitAverage, 0.05),
                                        _KnitDensityStrength);
 
@@ -560,7 +569,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     // smallest mip), so wrinkles never change the overall
                     // sheerness: ridges get denser, valleys thinner.
                     float wrinkleAverage = SAMPLE_TEXTURE2D_LOD(_WrinkleMap, sampler_WrinkleMap,
-                                                                float2(0.5, 0.5), 16.0).b;
+                        float2(0.5, 0.5), SmallestMip(_WrinkleMap_TexelSize)).b;
                     float heightRatio = wrinkle.b / max(wrinkleAverage, 0.05);
                     tau *= max(1.0 + (heightRatio - 1.0) * _WrinkleDensity * wrinkleAmount, 0.2);
 

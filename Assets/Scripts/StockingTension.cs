@@ -63,6 +63,7 @@ public class StockingTension : MonoBehaviour
     private MaterialPropertyBlock propertyBlock;
     private bool ready;
     private bool warned;
+    private bool blockApplied;
 
     private void OnEnable()
     {
@@ -154,8 +155,11 @@ public class StockingTension : MonoBehaviour
     {
         ready = false;
 
-        if (skinnedRenderer != null)
+        // Only clear the renderer's property block if this component set it,
+        // and always before the buffer it points at is released.
+        if (blockApplied && skinnedRenderer != null)
             skinnedRenderer.SetPropertyBlock(null);
+        blockApplied = false;
 
         if (tensionBuffer != null)
         {
@@ -273,6 +277,7 @@ public class StockingTension : MonoBehaviour
         skinnedRenderer.GetPropertyBlock(propertyBlock);
         propertyBlock.SetBuffer(TensionBufferId, tensionBuffer);
         skinnedRenderer.SetPropertyBlock(propertyBlock);
+        blockApplied = true;
     }
 
     /// <summary>
