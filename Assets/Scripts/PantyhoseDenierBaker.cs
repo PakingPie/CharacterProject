@@ -6,160 +6,173 @@ using UnityEditor;
 #endif
 
 /// <summary>
-/// Bakes per-vertex denier (fabric density/opacity) into the Red channel of mesh vertex colors.
+/// Bakes stocking density data into mesh vertex colors for the
+/// FabricPBR_ProceduralPattern (stocking) shader.
 ///
-/// HOW IT WORKS
-/// ─────────────
-/// Two bake modes are supported:
+/// CHANNELS
+/// ─────────
+///   R = dense zone   manufactured reinforcement: welt, heel, toe.
+///                    0 = normal sheer fabric, 1 = dense.
+///   G = stretch      how much the fabric is stretched over the leg.
+///                    0 = relaxed, 1 = fully stretched (sheerer).
+///   B, A             left untouched.
 ///
-/// 1. Reference Area Stretch (more physical)
-///    Compares the current mesh against a rest/reference mesh with identical
-///    topology. Local triangle-area stretch is measured per vertex and mapped
-///    through fixed calibration thresholds.
+/// HOW THE ZONES ARE FOUND
+/// ────────────────────────
+///   Welt   The open edge at the top of each stocking is detected from the
+///          mesh boundary. Vertices within "Welt Width" of that edge,
+///          measured along the surface, are marked dense.
+///   Toe    On each leg, the front part of the foot within "Toe Length"
+///          of the toe tip.
+///   Heel   On each leg, the back part of the foot within "Heel Length"
+///          of the rearmost point and below "Heel Height".
 ///
-///    Low area stretch   -> fabric stays dense -> bright R
-///    High area stretch  -> fabric thins out -> sheer -> dark R
+///   Legs are separated automatically: two mesh islands = two legs, or one
+///   island (pantyhose) split down the middle.
 ///
-///    Unlike the older implementation, this mode no longer normalises the
-///    current pose to its own min/max. That keeps the result interpretable
-///    across poses instead of expanding tiny changes into the full 0..1 range.
-///
-/// 2. Synthetic Circumference Stretch (practical for body-derived stockings)
-///    Uses the current mesh only. Each leg is sliced horizontally and local
-///    cross-section radius is compared against the narrowest slice radius.
-///
-///    Wider regions       -> more synthetic stretch -> lower denier -> dark R
-///    Narrower regions    -> less synthetic stretch -> higher denier -> bright R
-///
-///    This is not a true physical rest-garment simulation, but it works well
-///    when the stocking mesh was derived from the leg surface itself.
-///
-/// 3. Curvature Proxy (fallback / heuristic)
-///    Uses per-vertex normal divergence to detect anatomical pinch points:
-///
-///   For each vertex, the average angle between its own normal and the normals of
-///   all its edge-connected neighbours is computed.
-///
-///   High divergence (normals change quickly)  → surface is curving sharply
-///                                             → anatomical pinch (ankle, knee)
-///                                             → fabric is dense → bright R
-///
-///   Low divergence  (normals barely change)   → surface is flat/cylindrical
-///                                             → calf, thigh
-///                                             → fabric is sheer → dark R
-///
-/// This approach requires no limb-axis assumption and works correctly
-/// on any leg orientation or pose.
+/// STRETCH MODES
+/// ──────────────
+///   Synthetic Circumference   Uses this mesh only. Wider parts of the leg
+///                             (thigh, calf) count as more stretched than the
+///                             narrowest part (ankle).
+///   Reference Area Stretch    Compares against a rest mesh with identical
+///                             topology and measures real area change.
+///   None                      Writes G = 0.
 ///
 /// SHADER SETUP
 /// ─────────────
-/// On the FabricPBR_ProceduralPattern material:
-///     ✔  Enable "Vertex Red = Dense Zone" (_UseDenierFromVertexR)
-///     •  Opacity Facing Camera (R=0)  →  sheer zones  (_SheerOpacity)
-///     •  Dense Zone Opacity    (R=1)  →  dense zones  (_DenseOpacity)
+///     ✔  "Vertex Red = Dense Zone"   (_UseDenierFromVertexR)
+///     ✔  "Vertex Green = Stretch"    (_UseStretchFromVertexG)
+///     •  Dense Zone Opacity          (_DenseOpacity)   opacity where R = 1
+///     •  Stretch Makes Sheerer       (_StretchSheerness)
 ///
 /// USAGE
 /// ──────
-/// 1. Add this component to the leg mesh GameObject.
-/// 2. Tune the fields below.
-/// 3. Click "▶ Bake Denier Vertex Colors" in the Inspector.
+/// 1. Add this component to the stocking GameObject (MeshFilter or
+///    SkinnedMeshRenderer).
+/// 2. Set the Up and Forward axes if the mesh is not Y-up / Z-forward.
+/// 3. Click "Bake Denier Vertex Colors".
+///
+/// Meshes that live inside a model file (FBX) cannot store the result, so the
+/// baker saves a copy as a .asset next to the model and assigns it.
 /// </summary>
-public enum DenierBakeMode
+public enum DenierStretchMode
 {
-    ReferenceAreaStretch,
-    SyntheticCircumferenceStretch,
-    CurvatureProxy
+    ReferenceAreaStretch = 0,
+    SyntheticCircumferenceStretch = 1,
+    None = 2
 }
 
-[RequireComponent(typeof(MeshFilter))]
+public enum DenierAxis
+{
+    X, Y, Z, NegativeX, NegativeY, NegativeZ
+}
+
+public enum DenierLegLayout
+{
+    Auto,
+    SingleLeg,
+    TwoLegs
+}
+
 public class PantyhoseDenierBaker : MonoBehaviour
 {
-    // ─── Bake Source ─────────────────────────────────────────────────────────
-    [Header("Bake Source")]
-    [Tooltip("Reference Area Stretch is more physical: it compares the current mesh\n" +
-             "against a rest mesh with identical topology and bakes inverse local\n" +
-             "area stretch as denier. Curvature Proxy keeps the older heuristic.")]
-    public DenierBakeMode bakeMode = DenierBakeMode.ReferenceAreaStretch;
+    // ─── Orientation ─────────────────────────────────────────────────────────
+    [Header("Mesh Orientation (mesh space)")]
+    [Tooltip("Axis that points from the foot towards the hip.")]
+    public DenierAxis upAxis = DenierAxis.Y;
 
-    [Tooltip("Rest/reference mesh with the same vertex and triangle topology as\n" +
-             "the current mesh. Used only in Reference Area Stretch mode.")]
+    [Tooltip("Axis that points from the heel towards the toes.")]
+    public DenierAxis forwardAxis = DenierAxis.Z;
+
+    [Tooltip("Auto: two mesh islands are two legs; a single island is split\n" +
+             "down the middle if a gap is found between the feet.")]
+    public DenierLegLayout legLayout = DenierLegLayout.Auto;
+
+    [Tooltip("Metres per mesh unit. 0 = take it from this object's scale.\n" +
+             "Check the leg height printed in the Console after a bake: if it\n" +
+             "is not a believable number of metres, set this by hand.")]
+    [Min(0f)]
+    public float metersPerMeshUnit = 0f;
+
+    // ─── Dense Zones (Red channel) ───────────────────────────────────────────
+    [Header("Dense Zones (Red Channel)")]
+    [Tooltip("Density written at the welt (top band). 0 = no welt.")]
+    [Range(0f, 1f)]
+    public float weltDensity = 1.0f;
+
+    [Tooltip("Width of the welt band in metres, measured along the surface\n" +
+             "from the top open edge.")]
+    [Min(0f)]
+    public float weltWidth = 0.05f;
+
+    [Tooltip("Density written at the toe cap. 0 = no toe zone.")]
+    [Range(0f, 1f)]
+    public float toeDensity = 1.0f;
+
+    [Tooltip("Length of the toe cap in metres, measured back from the toe tip.")]
+    [Min(0f)]
+    public float toeLength = 0.05f;
+
+    [Tooltip("Density written at the heel. 0 = no heel zone.")]
+    [Range(0f, 1f)]
+    public float heelDensity = 1.0f;
+
+    [Tooltip("Length of the heel zone in metres, measured forward from the\n" +
+             "rearmost point of the foot.")]
+    [Min(0f)]
+    public float heelLength = 0.06f;
+
+    [Tooltip("Height of the heel zone in metres above the sole.")]
+    [Min(0f)]
+    public float heelHeight = 0.07f;
+
+    [Tooltip("Height in metres above the sole that counts as the foot.\n" +
+             "Toe and heel zones are only looked for below this height.")]
+    [Min(0.001f)]
+    public float footHeight = 0.09f;
+
+    [Tooltip("Soft edge of every zone in metres.")]
+    [Min(0.0001f)]
+    public float zoneFeather = 0.015f;
+
+    // ─── Stretch (Green channel) ─────────────────────────────────────────────
+    [Header("Stretch (Green Channel)")]
+    public DenierStretchMode stretchMode = DenierStretchMode.SyntheticCircumferenceStretch;
+
+    [Tooltip("Rest mesh with the same vertices and triangles as this mesh.\n" +
+             "Used only in Reference Area Stretch mode.")]
     public Mesh referenceRestMesh;
 
-    [Header("Synthetic Stretch Source")]
-    [Tooltip("Number of horizontal Y slices used to estimate local leg width\n" +
-             "for Synthetic Circumference Stretch mode.")]
+    [Tooltip("Number of slices along the leg used by Synthetic Circumference mode.")]
     [Range(8, 256)]
     public int syntheticSliceCount = 48;
 
-    [Tooltip("Scale applied to the narrowest slice radius when constructing the\n" +
-             "synthetic unstretched rest state. 1 = narrowest slice is treated as\n" +
-             "dense/rest. Values below 1 assume an even smaller unstretched garment\n" +
-             "and therefore produce more stretch overall.")]
-    [Range(0.5f, 1.2f)]
-    public float syntheticRestScale = 1.0f;
-
-    [Header("Reference Stretch Calibration")]
-    [Tooltip("Area-stretch ratio treated as dense / opaque.\n" +
-             "1.0 means the same local surface area as the rest mesh.")]
+    [Tooltip("Stretch ratio that counts as relaxed (G = Min Stretch).\n" +
+             "Synthetic mode: radius / ankle radius. Reference mode: area ratio.")]
     [Min(0.01f)]
-    public float areaStretchAtDense = 1.0f;
+    public float stretchRatioAtRelaxed = 1.0f;
 
-    [Tooltip("Area-stretch ratio treated as sheer / transparent.\n" +
-             "Values at or above this clamp to denierAtWidest.")]
+    [Tooltip("Stretch ratio that counts as fully stretched (G = Max Stretch).\n" +
+             "Synthetic mode: about 2 (thigh is twice the ankle radius).\n" +
+             "Reference mode: about 1.25.\n" +
+             "The measured range is printed in the Console after a bake.")]
     [Min(0.01f)]
-    public float areaStretchAtSheer = 1.25f;
+    public float stretchRatioAtFull = 2.0f;
 
-    // ─── Denier Range ─────────────────────────────────────────────────────────
-    [Header("Denier Range")]
-    [Tooltip("R written at high-curvature areas (ankle, knee).\n" +
-             "Should be HIGH (e.g. 1.0) = dense / opaque.")]
-    [Range(0f, 1f)]
-    public float denierAtNarrowest = 1.0f;
-
-    [Tooltip("R written at low-curvature areas (calf, thigh).\n" +
-             "Should be LOW (e.g. 0.0) = sheer / transparent.")]
-    [Range(0f, 1f)]
-    public float denierAtWidest = 0.0f;
-
-    [Tooltip("Power curve applied after normalisation.\n" +
-             "Values > 1 sharpen ankle/knee peaks and flatten calf/thigh further.\n" +
-             "1 = linear.  2–4 recommended.")]
-    [Range(0.1f, 5f)]
-    public float contrastPower = 2.5f;
-
-    // ─── Smoothing ────────────────────────────────────────────────────────────
-    [Header("Smoothing")]
-    [Tooltip("How many adjacency-weighted smoothing passes to run over the\n" +
-             "raw per-vertex divergence values.\n" +
-             "0 = raw (noisy).  4–8 = smooth, wide transition zone.")]
-    [Range(0, 16)]
-    public int smoothingPasses = 6;
-
-    // ─── Stretch (Green channel) ──────────────────────────────────────────────
-    [Header("Stretch (Green Channel)")]
-    [Tooltip("When enabled, the Green channel is written for the shader's\n" +
-             "stretch/opening control. In Reference Area Stretch mode, G stores\n" +
-             "the calibrated measured stretch directly. In Curvature Proxy mode,\n" +
-             "G falls back to inverse denier.\n\n" +
-             "Enable '_UseStretchFromVertexG' on the material to use this.")]
-    public bool bakeStretchFromDenier = true;
-
-    [Tooltip("Power curve applied before writing G.\n" +
-             "In Reference Area Stretch mode it shapes the measured stretch.\n" +
-             "In Curvature Proxy mode it shapes the inverse-denier fallback.\n" +
-             "1 = linear.  >1 = stretch concentrates more in high-stretch areas.")]
+    [Tooltip("Curve applied to the stretch. 1 = linear.")]
     [Range(0.2f, 5f)]
-    public float stretchContrastPower = 1.5f;
+    public float stretchContrastPower = 1.0f;
 
-    [Tooltip("Maximum stretch value written to G (at R=0, fully sheer).\n" +
-             "1.0 = full stretch.  Lower values limit how much the openings grow.")]
-    [Range(0f, 1f)]
-    public float maxStretch = 0.85f;
-
-    [Tooltip("Minimum stretch value written to G (at R=1, fully dense).\n" +
-             "0.0 = no stretch.  Raise slightly if you want some stretch everywhere.")]
     [Range(0f, 1f)]
     public float minStretch = 0.0f;
+
+    [Range(0f, 1f)]
+    public float maxStretch = 1.0f;
+
+    [Tooltip("Smoothing passes over the stretch values.")]
+    [Range(0, 16)]
+    public int smoothingPasses = 4;
 
 #if UNITY_EDITOR
 
@@ -171,99 +184,202 @@ public class PantyhoseDenierBaker : MonoBehaviour
     public void BakeDenierVertexColors()
     {
         MeshFilter mf = GetComponent<MeshFilter>();
-        Mesh sourceMesh = mf.sharedMesh;
+        SkinnedMeshRenderer smr = GetComponent<SkinnedMeshRenderer>();
+
+        Mesh sourceMesh = null;
+        if (smr != null) sourceMesh = smr.sharedMesh;
+        else if (mf != null) sourceMesh = mf.sharedMesh;
 
         if (sourceMesh == null)
         {
-            Debug.LogError("[DenierBaker] No mesh found on MeshFilter.", this);
+            Debug.LogError("[DenierBaker] No mesh found. Add this component to an object " +
+                           "with a MeshFilter or SkinnedMeshRenderer.", this);
             return;
         }
 
         Vector3[] vertices  = sourceMesh.vertices;
-        Vector3[] normals   = sourceMesh.normals;
         int[]     triangles = sourceMesh.triangles;
         int       vertCount = vertices.Length;
 
-        if (vertCount == 0 || normals.Length != vertCount)
+        if (vertCount == 0 || triangles.Length < 3)
         {
-            Debug.LogError("[DenierBaker] Mesh has no vertices or normals.", this);
+            Debug.LogError("[DenierBaker] Mesh has no vertices or triangles.", this);
             return;
         }
 
-        // ── Step 1: build adjacency list (vertices sharing an edge) ──────────
-        // We use welded positions because imported meshes often split verts at
-        // UV seams – sharing the same position but different normals. We weld
-        // them first so adjacency crosses seams correctly.
-        List<int>[] adj = BuildAdjacency(vertCount, triangles, vertices);
-
-        // ── Step 2: build density metric ──────────────────────────────────────
-        float[] densityMetric;
-        string metricName;
-        bool useCalibratedStretchMetric = false;
-
-        if (bakeMode == DenierBakeMode.ReferenceAreaStretch)
+        Vector3 up = AxisVector(upAxis);
+        Vector3 forward = AxisVector(forwardAxis);
+        if (Mathf.Abs(Vector3.Dot(up, forward)) > 0.5f)
         {
-            if (!TryBuildAreaStretchMetric(sourceMesh, referenceRestMesh,
-                out densityMetric, out string failureReason))
-            {
-                Debug.LogWarning(
-                    "[DenierBaker] Reference Area Stretch mode could not be used: " +
-                    failureReason + " Falling back to Curvature Proxy.", this);
-
-                densityMetric = ComputeNormalDivergenceMetric(normals, adj);
-                metricName = "curvature-proxy";
-            }
-            else
-            {
-                metricName = "reference-area-stretch";
-                useCalibratedStretchMetric = true;
-            }
+            Debug.LogError("[DenierBaker] Up Axis and Forward Axis must be different axes.", this);
+            return;
         }
-        else if (bakeMode == DenierBakeMode.SyntheticCircumferenceStretch)
-        {
-            if (!TryBuildSyntheticCircumferenceStretchMetric(vertices,
-                out densityMetric, out string failureReason))
-            {
-                Debug.LogWarning(
-                    "[DenierBaker] Synthetic Circumference Stretch mode could not be used: " +
-                    failureReason + " Falling back to Curvature Proxy.", this);
+        Vector3 right = Vector3.Cross(up, forward);
 
-                densityMetric = ComputeNormalDivergenceMetric(normals, adj);
-                metricName = "curvature-proxy";
-            }
-            else
-            {
-                metricName = "synthetic-circumference-stretch";
-                useCalibratedStretchMetric = true;
-            }
-        }
-        else
+        float scale = metersPerMeshUnit;
+        if (scale <= 0f)
         {
-            densityMetric = ComputeNormalDivergenceMetric(normals, adj);
-            metricName = "curvature-proxy";
+            Vector3 ls = transform.lossyScale;
+            scale = (Mathf.Abs(ls.x) + Mathf.Abs(ls.y) + Mathf.Abs(ls.z)) / 3f;
+            if (scale <= 1e-8f) scale = 1f;
         }
 
-        // ── Step 3: adjacency-weighted smoothing ──────────────────────────────
-        for (int pass = 0; pass < smoothingPasses; pass++)
-            SmoothOnGraph(densityMetric, adj);
-
-        // ── Step 4: gather metric range ───────────────────────────────────────
-        float minD = float.MaxValue, maxD = float.MinValue;
+        // Positions in metres, in the leg frame.
+        float[] h = new float[vertCount];   // height (foot → hip)
+        float[] f = new float[vertCount];   // forward (heel → toe)
+        float[] s = new float[vertCount];   // sideways
         for (int i = 0; i < vertCount; i++)
         {
-            if (densityMetric[i] < minD) minD = densityMetric[i];
-            if (densityMetric[i] > maxD) maxD = densityMetric[i];
+            Vector3 p = vertices[i] * scale;
+            h[i] = Vector3.Dot(p, up);
+            f[i] = Vector3.Dot(p, forward);
+            s[i] = Vector3.Dot(p, right);
         }
 
-        float divRange = maxD - minD;
-        if (!useCalibratedStretchMetric && divRange < 1e-6f)
+        // ── Topology ──────────────────────────────────────────────────────────
+        // Vertices are welded by position first: imported meshes split vertices
+        // at UV seams, which would otherwise look like open edges.
+        int[] canon = BuildCanonicalIndices(vertices);
+        HashSet<int>[] canonAdj = BuildCanonicalAdjacency(vertCount, triangles, canon);
+        List<int>[] adj = ExpandAdjacency(canonAdj, canon);
+        int[] component = BuildComponents(vertCount, triangles, canon, out int componentCount);
+
+        // ── Legs ──────────────────────────────────────────────────────────────
+        int[] leg = AssignLegs(h, s, component, componentCount, out int legCount, out string legInfo);
+
+        float[] legMinH = new float[legCount];
+        float[] legMaxH = new float[legCount];
+        for (int l = 0; l < legCount; l++) { legMinH[l] = float.MaxValue; legMaxH[l] = float.MinValue; }
+        for (int i = 0; i < vertCount; i++)
         {
-            Debug.LogWarning(
-                "[DenierBaker] Density signal is flat. " +
-                "The mesh may not have meaningful curvature variation.", this);
+            int l = leg[i];
+            if (h[i] < legMinH[l]) legMinH[l] = h[i];
+            if (h[i] > legMaxH[l]) legMaxH[l] = h[i];
         }
 
-        // ── Step 5: build Color array ─────────────────────────────────────────
+        // 1 inside the foot, fading to 0 above it.
+        float[] footMask = new float[vertCount];
+        for (int i = 0; i < vertCount; i++)
+        {
+            float above = h[i] - legMinH[leg[i]];
+            footMask[i] = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(footHeight, footHeight + zoneFeather, above));
+        }
+
+        // ── Red: dense zones ─────────────────────────────────────────────────
+        float[] dense = new float[vertCount];
+        int weltLoops = 0;
+
+        if (weltDensity > 0f && weltWidth > 0f)
+        {
+            float[] weltDist = ComputeWeltDistance(
+                vertices, scale, triangles, canon, canonAdj, component, componentCount, h,
+                weltWidth + zoneFeather, out weltLoops);
+
+            for (int i = 0; i < vertCount; i++)
+            {
+                float d = weltDist[canon[i]];
+                float m = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(weltWidth, weltWidth + zoneFeather, d));
+                dense[i] = Mathf.Max(dense[i], m * weltDensity);
+            }
+
+            if (weltLoops == 0)
+            {
+                Debug.LogWarning("[DenierBaker] No open top edge found, so no welt was baked. " +
+                                 "The stocking mesh needs an open edge at the top.", this);
+            }
+        }
+
+        // Toe tip and rearmost point of each foot.
+        float[] legTipF = new float[legCount];
+        float[] legRearF = new float[legCount];
+        for (int l = 0; l < legCount; l++) { legTipF[l] = float.MinValue; legRearF[l] = float.MaxValue; }
+        for (int i = 0; i < vertCount; i++)
+        {
+            int l = leg[i];
+            if (h[i] - legMinH[l] > footHeight) continue;
+            if (f[i] > legTipF[l]) legTipF[l] = f[i];
+            if (f[i] < legRearF[l]) legRearF[l] = f[i];
+        }
+
+        for (int i = 0; i < vertCount; i++)
+        {
+            int l = leg[i];
+            if (legTipF[l] == float.MinValue) continue;
+
+            if (toeDensity > 0f && toeLength > 0f)
+            {
+                float fromTip = legTipF[l] - f[i];
+                float m = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(toeLength, toeLength + zoneFeather, fromTip));
+                dense[i] = Mathf.Max(dense[i], m * footMask[i] * toeDensity);
+            }
+
+            if (heelDensity > 0f && heelLength > 0f)
+            {
+                float fromRear = f[i] - legRearF[l];
+                float above = h[i] - legMinH[l];
+                float mLen = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(heelLength, heelLength + zoneFeather, fromRear));
+                float mHgt = 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(heelHeight, heelHeight + zoneFeather, above));
+                dense[i] = Mathf.Max(dense[i], mLen * mHgt * heelDensity);
+            }
+        }
+
+        // ── Green: stretch ───────────────────────────────────────────────────
+        float[] stretch = new float[vertCount];
+        string stretchInfo = "none";
+
+        if (stretchMode != DenierStretchMode.None)
+        {
+            float[] ratio = null;
+            string failureReason = string.Empty;
+            bool ok;
+
+            if (stretchMode == DenierStretchMode.ReferenceAreaStretch)
+            {
+                ok = TryBuildAreaStretchMetric(sourceMesh, referenceRestMesh, out ratio, out failureReason);
+                stretchInfo = "reference-area";
+            }
+            else
+            {
+                ok = TryBuildCircumferenceMetric(h, f, s, leg, legCount, legMinH, legMaxH,
+                    footMask, out ratio, out failureReason);
+                stretchInfo = "synthetic-circumference";
+            }
+
+            if (!ok)
+            {
+                Debug.LogWarning("[DenierBaker] Stretch could not be baked: " + failureReason +
+                                 " G is written as 0.", this);
+                stretchInfo = "none (failed)";
+            }
+            else
+            {
+                for (int pass = 0; pass < smoothingPasses; pass++)
+                    SmoothOnGraph(ratio, adj);
+
+                float minR = float.MaxValue, maxR = float.MinValue;
+                float relaxed = Mathf.Max(0.01f, stretchRatioAtRelaxed);
+                float full = Mathf.Max(relaxed + 1e-4f, stretchRatioAtFull);
+
+                for (int i = 0; i < vertCount; i++)
+                {
+                    if (ratio[i] < minR) minR = ratio[i];
+                    if (ratio[i] > maxR) maxR = ratio[i];
+
+                    float t = Mathf.InverseLerp(relaxed, full, ratio[i]);
+                    t = Mathf.Pow(t, stretchContrastPower);
+                    stretch[i] = Mathf.Lerp(minStretch, maxStretch, t);
+                }
+
+                stretchInfo += $", measured ratio {minR:F2} to {maxR:F2}";
+            }
+        }
+
+        // ── Write colors ─────────────────────────────────────────────────────
         Color[] existingColors = sourceMesh.colors;
         bool    hasColors      = existingColors != null && existingColors.Length == vertCount;
         Color[] newColors      = new Color[vertCount];
@@ -271,220 +387,386 @@ public class PantyhoseDenierBaker : MonoBehaviour
         for (int i = 0; i < vertCount; i++)
         {
             Color prev = hasColors ? existingColors[i] : new Color(0f, 0f, 0f, 1f);
-
-            float r;
-            float calibratedStretch = 0f;
-            if (useCalibratedStretchMetric)
-            {
-                float denseStretch = Mathf.Max(0.01f, areaStretchAtDense);
-                float sheerStretch = Mathf.Max(denseStretch + 1e-4f, areaStretchAtSheer);
-
-                // 0 = dense/rest-like, 1 = fully sheer from stretch.
-                calibratedStretch = Mathf.InverseLerp(denseStretch, sheerStretch, densityMetric[i]);
-                float curvedSheer = Mathf.Pow(calibratedStretch, contrastPower);
-                r = Mathf.Lerp(denierAtNarrowest, denierAtWidest, curvedSheer);
-            }
-            else
-            {
-                float norm = (divRange > 1e-6f) ? (densityMetric[i] - minD) / divRange : 0f;
-
-                // Power curve: sharpens high-curvature peaks, suppresses flat zones
-                float curved = Mathf.Pow(norm, contrastPower);
-
-                // High divergence (ankle/knee) → denierAtNarrowest (bright)
-                // Low  divergence (calf/thigh) → denierAtWidest    (dark)
-                r = Mathf.Lerp(denierAtWidest, denierAtNarrowest, curved);
-            }
-
-            // Green channel:
-            // - Reference Area Stretch mode: measured/calibrated stretch.
-            // - Curvature Proxy mode: inverse denier fallback.
-            float g = prev.g;
-            if (bakeStretchFromDenier)
-            {
-                float stretchSignal = useCalibratedStretchMetric
-                    ? calibratedStretch
-                    : 1f - r;
-                float stretchCurved = Mathf.Pow(stretchSignal, stretchContrastPower);
-                g = Mathf.Lerp(minStretch, maxStretch, stretchCurved);
-            }
-
-            newColors[i] = new Color(r, g, prev.b, prev.a);
+            newColors[i] = new Color(Mathf.Clamp01(dense[i]), Mathf.Clamp01(stretch[i]), prev.b, prev.a);
         }
 
-        // ── Step 6: write to mesh ─────────────────────────────────────────────
-        Undo.RecordObject(sourceMesh, "Bake Denier Vertex Colors");
-        sourceMesh.colors = newColors;
-        EditorUtility.SetDirty(sourceMesh);
+        Mesh targetMesh = GetWritableMesh(sourceMesh, smr, mf);
+        if (targetMesh == null)
+            return;
+
+        Undo.RecordObject(targetMesh, "Bake Denier Vertex Colors");
+        targetMesh.colors = newColors;
+        EditorUtility.SetDirty(targetMesh);
+        AssetDatabase.SaveAssets();
+
+        float tallest = 0f;
+        for (int l = 0; l < legCount; l++)
+            tallest = Mathf.Max(tallest, legMaxH[l] - legMinH[l]);
 
         Debug.Log(
-            $"[DenierBaker] Done. {metricName} bake on '{sourceMesh.name}'. " +
-            $"Smoothing passes: {smoothingPasses}, Contrast power: {contrastPower}, " +
-            $"metric range: [{minD:F4}, {maxD:F4}].",
+            $"[DenierBaker] Done on '{targetMesh.name}'. Legs: {legCount} ({legInfo}), " +
+            $"leg height {tallest:F2} m, welt edges found: {weltLoops}, stretch: {stretchInfo}.",
             this);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Helpers
+    // Saving
     // ══════════════════════════════════════════════════════════════════════════
 
-    private static float[] ComputeNormalDivergenceMetric(Vector3[] normals, List<int>[] adj)
+    /// <summary>
+    /// Returns a mesh the result can be saved into. A mesh inside a model file
+    /// (FBX) or a built-in mesh loses its changes on reimport, so a copy is
+    /// saved as a .asset and assigned to the renderer.
+    /// </summary>
+    private Mesh GetWritableMesh(Mesh sourceMesh, SkinnedMeshRenderer smr, MeshFilter mf)
     {
-        int vertCount = normals.Length;
-        float[] divergence = new float[vertCount];
+        string path = AssetDatabase.GetAssetPath(sourceMesh);
+        bool standalone = !string.IsNullOrEmpty(path)
+                          && path.StartsWith("Assets/")
+                          && path.EndsWith(".asset");
+        if (standalone)
+            return sourceMesh;
 
-        for (int i = 0; i < vertCount; i++)
+        string folder = "Assets";
+        if (!string.IsNullOrEmpty(path) && path.StartsWith("Assets/"))
         {
-            List<int> neighbours = adj[i];
-            if (neighbours.Count == 0)
-            {
-                divergence[i] = 0f;
-                continue;
-            }
-
-            float sumAngle = 0f;
-            Vector3 ni = normals[i];
-
-            foreach (int j in neighbours)
-            {
-                float dot = Mathf.Clamp(Vector3.Dot(ni, normals[j]), -1f, 1f);
-                sumAngle += Mathf.Acos(dot);
-            }
-
-            divergence[i] = sumAngle / neighbours.Count;
+            int slash = path.LastIndexOf('/');
+            if (slash > 0) folder = path.Substring(0, slash);
         }
 
-        return divergence;
+        Mesh copy = Instantiate(sourceMesh);
+        copy.name = sourceMesh.name + "_Denier";
+
+        string newPath = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + copy.name + ".asset");
+        AssetDatabase.CreateAsset(copy, newPath);
+
+        if (smr != null)
+        {
+            Undo.RecordObject(smr, "Assign Baked Denier Mesh");
+            smr.sharedMesh = copy;
+            EditorUtility.SetDirty(smr);
+        }
+        else if (mf != null)
+        {
+            Undo.RecordObject(mf, "Assign Baked Denier Mesh");
+            mf.sharedMesh = copy;
+            EditorUtility.SetDirty(mf);
+        }
+
+        Debug.Log($"[DenierBaker] The mesh could not store vertex colors in place, " +
+                  $"so a copy was saved to '{newPath}' and assigned to this object.", this);
+        return copy;
     }
 
-    private bool TryBuildSyntheticCircumferenceStretchMetric(
-        Vector3[] positions,
-        out float[] circumferenceStretch,
-        out string failureReason)
-    {
-        circumferenceStretch = null;
-        failureReason = string.Empty;
+    // ══════════════════════════════════════════════════════════════════════════
+    // Legs
+    // ══════════════════════════════════════════════════════════════════════════
 
-        int vertCount = positions.Length;
-        if (vertCount == 0)
+    private static Vector3 AxisVector(DenierAxis axis)
+    {
+        switch (axis)
         {
-            failureReason = "Mesh has no vertices.";
-            return false;
+            case DenierAxis.X:         return Vector3.right;
+            case DenierAxis.Y:         return Vector3.up;
+            case DenierAxis.Z:         return Vector3.forward;
+            case DenierAxis.NegativeX: return Vector3.left;
+            case DenierAxis.NegativeY: return Vector3.down;
+            default:                   return Vector3.back;
+        }
+    }
+
+    /// <summary>Gives every vertex a leg index.</summary>
+    private int[] AssignLegs(
+        float[] h, float[] s, int[] component, int componentCount,
+        out int legCount, out string info)
+    {
+        int vertCount = h.Length;
+        int[] leg = new int[vertCount];
+
+        if (legLayout == DenierLegLayout.SingleLeg)
+        {
+            legCount = 1;
+            info = "single leg";
+            return leg;
         }
 
-        int sliceCount = Mathf.Max(8, syntheticSliceCount);
+        // Count the mesh islands that are big enough to be a leg.
+        int[] sizes = new int[componentCount];
+        for (int i = 0; i < vertCount; i++) sizes[component[i]]++;
 
-        float minY = float.MaxValue;
-        float maxY = float.MinValue;
-        float minX = float.MaxValue;
-        float maxX = float.MinValue;
+        int bigIslands = 0;
+        for (int c = 0; c < componentCount; c++)
+            if (sizes[c] >= vertCount * 0.05f) bigIslands++;
 
+        if (legLayout == DenierLegLayout.Auto && bigIslands >= 2)
+        {
+            for (int i = 0; i < vertCount; i++) leg[i] = component[i];
+            legCount = componentCount;
+            info = "one per mesh island";
+            return leg;
+        }
+
+        // One island: look for a gap between the two feet.
+        float minH = float.MaxValue, maxH = float.MinValue;
+        float minS = float.MaxValue, maxS = float.MinValue;
         for (int i = 0; i < vertCount; i++)
         {
-            Vector3 p = positions[i];
-            if (p.y < minY) minY = p.y;
-            if (p.y > maxY) maxY = p.y;
-            if (p.x < minX) minX = p.x;
-            if (p.x > maxX) maxX = p.x;
+            if (h[i] < minH) minH = h[i];
+            if (h[i] > maxH) maxH = h[i];
+            if (s[i] < minS) minS = s[i];
+            if (s[i] > maxS) maxS = s[i];
         }
 
-        float yRange = maxY - minY;
-        if (yRange < 1e-6f)
+        float lowBand = minH + (maxH - minH) * 0.15f;
+        List<float> low = new List<float>();
+        for (int i = 0; i < vertCount; i++)
+            if (h[i] <= lowBand) low.Add(s[i]);
+        low.Sort();
+
+        float bestGap = 0f;
+        float split = (minS + maxS) * 0.5f;
+        for (int i = 1; i < low.Count; i++)
         {
-            failureReason = "Mesh has no vertical Y extent for synthetic slicing.";
-            return false;
+            float gap = low[i] - low[i - 1];
+            if (gap > bestGap)
+            {
+                bestGap = gap;
+                split = (low[i] + low[i - 1]) * 0.5f;
+            }
         }
 
-        float centerX = (minX + maxX) * 0.5f;
-        int bucketCount = sliceCount * 2;
+        bool twoLegs = legLayout == DenierLegLayout.TwoLegs
+                       || bestGap > (maxS - minS) * 0.1f;
+        if (!twoLegs)
+        {
+            legCount = 1;
+            info = "single leg";
+            return leg;
+        }
 
-        float[] sumX = new float[bucketCount];
-        float[] sumZ = new float[bucketCount];
+        for (int i = 0; i < vertCount; i++) leg[i] = s[i] >= split ? 1 : 0;
+        legCount = 2;
+        info = "split down the middle";
+        return leg;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Welt
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Distance along the surface (metres) from the top open edge of each mesh
+    /// island. Indexed by canonical vertex. Vertices further than maxDistance
+    /// keep float.MaxValue.
+    /// </summary>
+    private static float[] ComputeWeltDistance(
+        Vector3[] positions, float scale, int[] tris, int[] canon,
+        HashSet<int>[] canonAdj, int[] component, int componentCount, float[] h,
+        float maxDistance, out int weltLoopCount)
+    {
+        int vertCount = positions.Length;
+
+        // An edge used by exactly one triangle is an open edge.
+        var edgeUse = new Dictionary<long, int>();
+        for (int t = 0; t < tris.Length; t += 3)
+        {
+            int a = canon[tris[t]];
+            int b = canon[tris[t + 1]];
+            int c = canon[tris[t + 2]];
+            CountEdge(edgeUse, a, b);
+            CountEdge(edgeUse, b, c);
+            CountEdge(edgeUse, c, a);
+        }
+
+        // Join open edges into loops.
+        int[] loopParent = new int[vertCount];
+        for (int i = 0; i < vertCount; i++) loopParent[i] = i;
+        bool[] onBoundary = new bool[vertCount];
+
+        foreach (KeyValuePair<long, int> kv in edgeUse)
+        {
+            if (kv.Value != 1) continue;
+            int a = (int)(kv.Key >> 32);
+            int b = (int)(kv.Key & 0xFFFFFFFFL);
+            onBoundary[a] = true;
+            onBoundary[b] = true;
+            Union(loopParent, a, b);
+        }
+
+        // Average height of each loop.
+        var loopSum = new Dictionary<int, float>();
+        var loopCount = new Dictionary<int, int>();
+        for (int i = 0; i < vertCount; i++)
+        {
+            if (!onBoundary[i]) continue;
+            int root = Find(loopParent, i);
+            loopSum.TryGetValue(root, out float sum);
+            loopCount.TryGetValue(root, out int count);
+            loopSum[root] = sum + h[i];
+            loopCount[root] = count + 1;
+        }
+
+        // The highest loop of each island is its welt edge.
+        int[] bestLoop = new int[componentCount];
+        float[] bestHeight = new float[componentCount];
+        for (int c = 0; c < componentCount; c++) { bestLoop[c] = -1; bestHeight[c] = float.MinValue; }
+
+        foreach (KeyValuePair<int, float> kv in loopSum)
+        {
+            int root = kv.Key;
+            float mean = kv.Value / loopCount[root];
+            int c = component[root];
+            if (mean > bestHeight[c])
+            {
+                bestHeight[c] = mean;
+                bestLoop[c] = root;
+            }
+        }
+
+        weltLoopCount = 0;
+        for (int c = 0; c < componentCount; c++)
+            if (bestLoop[c] >= 0) weltLoopCount++;
+
+        // Shortest path along edges from the welt loops (Dijkstra).
+        float[] dist = new float[vertCount];
+        for (int i = 0; i < vertCount; i++) dist[i] = float.MaxValue;
+
+        var heap = new MinHeap(256);
+        for (int i = 0; i < vertCount; i++)
+        {
+            if (!onBoundary[i]) continue;
+            if (Find(loopParent, i) != bestLoop[component[i]]) continue;
+            dist[i] = 0f;
+            heap.Push(0f, i);
+        }
+
+        while (heap.Count > 0)
+        {
+            heap.Pop(out float d, out int v);
+            if (d > dist[v]) continue;
+            if (d > maxDistance) break;
+
+            foreach (int n in canonAdj[v])
+            {
+                float nd = d + (positions[v] - positions[n]).magnitude * scale;
+                if (nd < dist[n])
+                {
+                    dist[n] = nd;
+                    heap.Push(nd, n);
+                }
+            }
+        }
+
+        return dist;
+    }
+
+    private static void CountEdge(Dictionary<long, int> edgeUse, int a, int b)
+    {
+        if (a == b) return;
+        long lo = Mathf.Min(a, b);
+        long hi = Mathf.Max(a, b);
+        long key = (lo << 32) | hi;
+        edgeUse.TryGetValue(key, out int n);
+        edgeUse[key] = n + 1;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Stretch
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Slices each leg along its height and compares the radius of every slice
+    /// with the narrowest slice above the foot (the ankle). The foot itself is
+    /// treated as relaxed, because a horizontal slice through a foot is not a
+    /// circumference.
+    /// </summary>
+    private bool TryBuildCircumferenceMetric(
+        float[] h, float[] f, float[] s, int[] leg, int legCount,
+        float[] legMinH, float[] legMaxH, float[] footMask,
+        out float[] ratio, out string failureReason)
+    {
+        ratio = null;
+        failureReason = string.Empty;
+
+        int vertCount = h.Length;
+        int sliceCount = Mathf.Max(8, syntheticSliceCount);
+        int bucketCount = legCount * sliceCount;
+
+        int[] bucket = new int[vertCount];
+        float[] sumF = new float[bucketCount];
+        float[] sumS = new float[bucketCount];
         int[] counts = new int[bucketCount];
 
         for (int i = 0; i < vertCount; i++)
         {
-            int bucket = GetSyntheticSliceBucket(positions[i], minY, yRange, centerX, sliceCount);
-            sumX[bucket] += positions[i].x;
-            sumZ[bucket] += positions[i].z;
-            counts[bucket]++;
-        }
-
-        Vector2[] centers = new Vector2[bucketCount];
-        for (int bucket = 0; bucket < bucketCount; bucket++)
-        {
-            if (counts[bucket] == 0)
-                continue;
-
-            float invCount = 1f / counts[bucket];
-            centers[bucket] = new Vector2(sumX[bucket] * invCount, sumZ[bucket] * invCount);
+            int l = leg[i];
+            float range = Mathf.Max(legMaxH[l] - legMinH[l], 1e-6f);
+            float t = Mathf.Clamp01((h[i] - legMinH[l]) / range);
+            int slice = Mathf.Clamp(Mathf.FloorToInt(t * sliceCount), 0, sliceCount - 1);
+            int b = l * sliceCount + slice;
+            bucket[i] = b;
+            sumF[b] += f[i];
+            sumS[b] += s[i];
+            counts[b]++;
         }
 
         float[] radiusSum = new float[bucketCount];
         for (int i = 0; i < vertCount; i++)
         {
-            int bucket = GetSyntheticSliceBucket(positions[i], minY, yRange, centerX, sliceCount);
-            Vector2 dxz = new Vector2(positions[i].x, positions[i].z) - centers[bucket];
-            radiusSum[bucket] += dxz.magnitude;
+            int b = bucket[i];
+            float cf = sumF[b] / counts[b];
+            float cs = sumS[b] / counts[b];
+            float df = f[i] - cf;
+            float ds = s[i] - cs;
+            radiusSum[b] += Mathf.Sqrt(df * df + ds * ds);
         }
 
         float[] avgRadius = new float[bucketCount];
-        float[] minRadiusPerSide = { float.MaxValue, float.MaxValue };
+        float[] ankleRadius = new float[legCount];
+        for (int l = 0; l < legCount; l++) ankleRadius[l] = float.MaxValue;
 
-        for (int bucket = 0; bucket < bucketCount; bucket++)
+        for (int b = 0; b < bucketCount; b++)
         {
-            if (counts[bucket] == 0)
-                continue;
+            if (counts[b] == 0) continue;
+            avgRadius[b] = radiusSum[b] / counts[b];
 
-            avgRadius[bucket] = radiusSum[bucket] / counts[bucket];
-            if (avgRadius[bucket] <= 1e-6f)
-                continue;
+            int l = b / sliceCount;
+            int slice = b % sliceCount;
+            float range = legMaxH[l] - legMinH[l];
+            float sliceBottom = range * slice / sliceCount;
 
-            int side = bucket / sliceCount;
-            if (avgRadius[bucket] < minRadiusPerSide[side])
-                minRadiusPerSide[side] = avgRadius[bucket];
+            // Only slices above the foot can be the ankle.
+            if (sliceBottom < footHeight) continue;
+            if (avgRadius[b] > 1e-6f && avgRadius[b] < ankleRadius[l])
+                ankleRadius[l] = avgRadius[b];
         }
 
-        if (minRadiusPerSide[0] == float.MaxValue && minRadiusPerSide[1] == float.MaxValue)
+        bool any = false;
+        for (int l = 0; l < legCount; l++)
+            if (ankleRadius[l] != float.MaxValue) any = true;
+
+        if (!any)
         {
-            failureReason = "Could not determine slice radii for synthetic stretch.";
+            failureReason = "No leg slices were found above the foot. Check the Up Axis " +
+                            "and Metres Per Mesh Unit.";
             return false;
         }
 
-        circumferenceStretch = new float[vertCount];
+        ratio = new float[vertCount];
         for (int i = 0; i < vertCount; i++)
         {
-            int bucket = GetSyntheticSliceBucket(positions[i], minY, yRange, centerX, sliceCount);
-            int side = bucket / sliceCount;
-            float baseRadius = minRadiusPerSide[side];
-            if (baseRadius == float.MaxValue)
-                baseRadius = minRadiusPerSide[1 - side];
-
-            baseRadius = Mathf.Max(baseRadius * syntheticRestScale, 1e-6f);
-            float radius = avgRadius[bucket];
-            if (radius <= 1e-6f)
+            int l = leg[i];
+            if (ankleRadius[l] == float.MaxValue)
             {
-                Vector2 dxz = new Vector2(positions[i].x, positions[i].z) - centers[bucket];
-                radius = dxz.magnitude;
+                ratio[i] = 1f;
+                continue;
             }
 
-            circumferenceStretch[i] = radius / baseRadius;
+            float r = avgRadius[bucket[i]] / ankleRadius[l];
+            ratio[i] = Mathf.Lerp(r, 1f, footMask[i]);
         }
 
         return true;
-    }
-
-    private static int GetSyntheticSliceBucket(
-        Vector3 position,
-        float minY,
-        float yRange,
-        float centerX,
-        int sliceCount)
-    {
-        float y01 = Mathf.Clamp01((position.y - minY) / Mathf.Max(yRange, 1e-6f));
-        int slice = Mathf.Clamp(Mathf.FloorToInt(y01 * sliceCount), 0, sliceCount - 1);
-        int side = position.x >= centerX ? 1 : 0;
-        return side * sliceCount + slice;
     }
 
     private static bool TryBuildAreaStretchMetric(
@@ -566,14 +848,17 @@ public class PantyhoseDenierBaker : MonoBehaviour
         return Vector3.Cross(b - a, c - a).magnitude * 0.5f;
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // Topology helpers
+    // ══════════════════════════════════════════════════════════════════════════
+
     /// <summary>
-    /// Builds a per-vertex adjacency list.
-    /// Welds vertices at the same world position so UV-seam splits
-    /// don't break adjacency across the seam.
+    /// Maps every vertex to the first vertex at the same position, so UV-seam
+    /// splits count as one vertex.
     /// </summary>
-    private static List<int>[] BuildAdjacency(int vertCount, int[] tris, Vector3[] positions)
+    private static int[] BuildCanonicalIndices(Vector3[] positions)
     {
-        // Map each unique position → canonical vertex index
+        int vertCount = positions.Length;
         var posToCanon = new Dictionary<Vector3, int>(vertCount, new Vector3EqComparer());
         int[] canon = new int[vertCount];
 
@@ -587,7 +872,12 @@ public class PantyhoseDenierBaker : MonoBehaviour
             canon[i] = c;
         }
 
-        // Build adjacency on canonical indices, then mirror back to all splits
+        return canon;
+    }
+
+    /// <summary>Edge neighbours on welded vertices. Only canonical slots are filled.</summary>
+    private static HashSet<int>[] BuildCanonicalAdjacency(int vertCount, int[] tris, int[] canon)
+    {
         var canonAdj = new HashSet<int>[vertCount];
         for (int i = 0; i < vertCount; i++) canonAdj[i] = new HashSet<int>();
 
@@ -597,23 +887,30 @@ public class PantyhoseDenierBaker : MonoBehaviour
             int b = canon[tris[t + 1]];
             int c = canon[tris[t + 2]];
 
-            canonAdj[a].Add(b); canonAdj[a].Add(c);
-            canonAdj[b].Add(a); canonAdj[b].Add(c);
-            canonAdj[c].Add(a); canonAdj[c].Add(b);
+            if (a != b) { canonAdj[a].Add(b); canonAdj[b].Add(a); }
+            if (b != c) { canonAdj[b].Add(c); canonAdj[c].Add(b); }
+            if (c != a) { canonAdj[c].Add(a); canonAdj[a].Add(c); }
         }
 
-        // Expand canonical adjacency back to split-vertex adjacency
-        // (so seam vertices share the normal-space neighbours of their weld-twin)
-        var adj = new List<int>[vertCount];
-        for (int i = 0; i < vertCount; i++) adj[i] = new List<int>();
+        return canonAdj;
+    }
 
-        // cache: for each canonical index, which real indices map to it?
+    /// <summary>
+    /// Expands welded adjacency back to every split vertex, so smoothing
+    /// crosses UV seams.
+    /// </summary>
+    private static List<int>[] ExpandAdjacency(HashSet<int>[] canonAdj, int[] canon)
+    {
+        int vertCount = canon.Length;
+
         var canonToAll = new List<int>[vertCount];
         for (int i = 0; i < vertCount; i++) canonToAll[i] = new List<int>();
         for (int i = 0; i < vertCount; i++) canonToAll[canon[i]].Add(i);
 
+        var adj = new List<int>[vertCount];
         for (int i = 0; i < vertCount; i++)
         {
+            adj[i] = new List<int>();
             foreach (int cNeighbour in canonAdj[canon[i]])
             {
                 foreach (int realNeighbour in canonToAll[cNeighbour])
@@ -625,7 +922,54 @@ public class PantyhoseDenierBaker : MonoBehaviour
         return adj;
     }
 
-    /// <summary>One pass of adjacency-weighted (graph) Gaussian smoothing.</summary>
+    /// <summary>Labels connected mesh islands 0..componentCount-1 for every vertex.</summary>
+    private static int[] BuildComponents(int vertCount, int[] tris, int[] canon, out int componentCount)
+    {
+        int[] parent = new int[vertCount];
+        for (int i = 0; i < vertCount; i++) parent[i] = i;
+
+        for (int t = 0; t < tris.Length; t += 3)
+        {
+            int a = canon[tris[t]];
+            Union(parent, a, canon[tris[t + 1]]);
+            Union(parent, a, canon[tris[t + 2]]);
+        }
+
+        var rootToId = new Dictionary<int, int>();
+        int[] component = new int[vertCount];
+        for (int i = 0; i < vertCount; i++)
+        {
+            int root = Find(parent, canon[i]);
+            if (!rootToId.TryGetValue(root, out int id))
+            {
+                id = rootToId.Count;
+                rootToId[root] = id;
+            }
+            component[i] = id;
+        }
+
+        componentCount = rootToId.Count;
+        return component;
+    }
+
+    private static int Find(int[] parent, int i)
+    {
+        while (parent[i] != i)
+        {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        return i;
+    }
+
+    private static void Union(int[] parent, int a, int b)
+    {
+        int ra = Find(parent, a);
+        int rb = Find(parent, b);
+        if (ra != rb) parent[ra] = rb;
+    }
+
+    /// <summary>One pass of adjacency-weighted smoothing.</summary>
     private static void SmoothOnGraph(float[] values, List<int>[] adj)
     {
         int     n    = values.Length;
@@ -648,6 +992,65 @@ public class PantyhoseDenierBaker : MonoBehaviour
         }
 
         for (int i = 0; i < n; i++) values[i] = copy[i];
+    }
+
+    /// <summary>Small binary min-heap of (key, vertex) pairs for Dijkstra.</summary>
+    private class MinHeap
+    {
+        private float[] keys;
+        private int[] items;
+        public int Count { get; private set; }
+
+        public MinHeap(int capacity)
+        {
+            keys = new float[Mathf.Max(capacity, 16)];
+            items = new int[keys.Length];
+        }
+
+        public void Push(float key, int item)
+        {
+            if (Count == keys.Length)
+            {
+                System.Array.Resize(ref keys, keys.Length * 2);
+                System.Array.Resize(ref items, items.Length * 2);
+            }
+
+            int i = Count++;
+            while (i > 0)
+            {
+                int p = (i - 1) / 2;
+                if (keys[p] <= key) break;
+                keys[i] = keys[p];
+                items[i] = items[p];
+                i = p;
+            }
+            keys[i] = key;
+            items[i] = item;
+        }
+
+        public void Pop(out float key, out int item)
+        {
+            key = keys[0];
+            item = items[0];
+
+            Count--;
+            float lastKey = keys[Count];
+            int lastItem = items[Count];
+
+            int i = 0;
+            while (true)
+            {
+                int child = i * 2 + 1;
+                if (child >= Count) break;
+                if (child + 1 < Count && keys[child + 1] < keys[child]) child++;
+                if (keys[child] >= lastKey) break;
+                keys[i] = keys[child];
+                items[i] = items[child];
+                i = child;
+            }
+            keys[i] = lastKey;
+            items[i] = lastItem;
+        }
     }
 
     // Equality comparer that snaps positions to a small grid to tolerate
@@ -697,21 +1100,18 @@ public class PantyhoseDenierBakerEditor : Editor
 
         GUI.backgroundColor = prevBg;
 
-        // Small hint label
-        string helpMsg = "Writes vertex colors directly onto the mesh in-place (no asset copy created).\n" +
-            "R channel: denier (density) — enable '_UseDenierFromVertexR' on the material.";
-        if (baker.bakeMode == DenierBakeMode.ReferenceAreaStretch)
-            helpMsg += "\nBake mode: Reference Area Stretch — assign a rest mesh with matching topology. " +
-                $"Stretch {baker.areaStretchAtDense:F2} stays dense; stretch {baker.areaStretchAtSheer:F2} becomes sheer.";
-        else if (baker.bakeMode == DenierBakeMode.SyntheticCircumferenceStretch)
-            helpMsg += "\nBake mode: Synthetic Circumference Stretch — estimates stretch from horizontal leg width. " +
-                $"Rest scale: {baker.syntheticRestScale:F2}, slices: {baker.syntheticSliceCount}.";
+        string helpMsg =
+            "R channel: dense zones (welt, heel, toe). Enable 'Vertex Red = Dense Zone' on the material.\n" +
+            "G channel: stretch. Enable 'Vertex Green = Stretch' on the material.\n" +
+            "A mesh inside a model file is copied to a .asset next to it so the result is kept.";
+
+        if (baker.stretchMode == DenierStretchMode.ReferenceAreaStretch)
+            helpMsg += "\nStretch: Reference Area. Assign a rest mesh with matching topology.";
+        else if (baker.stretchMode == DenierStretchMode.SyntheticCircumferenceStretch)
+            helpMsg += "\nStretch: Synthetic Circumference. Leg radius compared with the ankle.";
         else
-            helpMsg += "\nBake mode: Curvature Proxy — heuristic fallback, not physical thickness.";
-        if (baker.bakeStretchFromDenier)
-            helpMsg += baker.bakeMode == DenierBakeMode.ReferenceAreaStretch
-                ? "\nG channel: calibrated measured stretch — enable '_UseStretchFromVertexG' on the material."
-                : "\nG channel: inverse denier fallback — enable '_UseStretchFromVertexG' on the material.";
+            helpMsg += "\nStretch: None. G is written as 0.";
+
         EditorGUILayout.HelpBox(helpMsg, MessageType.Info);
     }
 }
