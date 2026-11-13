@@ -20,15 +20,15 @@ using UnityEngine;
 ///
 /// SETUP
 /// ──────
-/// 1. Add this component to the stocking object (it needs a
-///    SkinnedMeshRenderer).
+/// 1. Add this component to the stocking object. The stocking must be a
+///    skinned mesh (SkinnedMeshRenderer with bone weights). If it is a plain
+///    mesh, run StockingSkinTransfer on it first.
 /// 2. On the material, enable "Live Tension (needs StockingTension)".
 /// 3. To check it, enable "Debug View" on the material and bend the knee:
 ///    the front should turn red and the back blue.
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
-[RequireComponent(typeof(SkinnedMeshRenderer))]
 public class StockingTension : MonoBehaviour
 {
     [Tooltip("Smoothing passes over the measured tension. Higher values hide\n" +
@@ -62,6 +62,7 @@ public class StockingTension : MonoBehaviour
     private ComputeBuffer tensionBuffer;
     private MaterialPropertyBlock propertyBlock;
     private bool ready;
+    private bool warned;
 
     private void OnEnable()
     {
@@ -75,10 +76,7 @@ public class StockingTension : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (skinnedRenderer == null)
-            skinnedRenderer = GetComponent<SkinnedMeshRenderer>();
-
-        if (!ready || skinnedRenderer.sharedMesh != sourceMesh)
+        if (!ready || skinnedRenderer == null || skinnedRenderer.sharedMesh != sourceMesh)
             Initialise();
 
         if (ready)
@@ -95,11 +93,22 @@ public class StockingTension : MonoBehaviour
 
         skinnedRenderer = GetComponent<SkinnedMeshRenderer>();
         if (skinnedRenderer == null)
+        {
+            WarnOnce("needs a SkinnedMeshRenderer on the same object.");
             return;
+        }
 
         sourceMesh = skinnedRenderer.sharedMesh;
         if (sourceMesh == null)
             return;
+
+        // A mesh without bone weights never deforms, so there is nothing to measure.
+        if (sourceMesh.bindposes == null || sourceMesh.bindposes.Length == 0)
+        {
+            WarnOnce("the mesh has no bone weights, so it cannot follow the leg. " +
+                     "Skin the stocking first (see StockingSkinTransfer).");
+            return;
+        }
 
         Vector3[] restVertices = sourceMesh.vertices;
         triangles = sourceMesh.triangles;
@@ -132,6 +141,13 @@ public class StockingTension : MonoBehaviour
 
         propertyBlock = new MaterialPropertyBlock();
         ready = true;
+    }
+
+    private void WarnOnce(string message)
+    {
+        if (warned) return;
+        warned = true;
+        Debug.LogWarning("[StockingTension] Inactive: " + message, this);
     }
 
     private void Release()
