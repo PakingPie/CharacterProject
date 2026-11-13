@@ -51,6 +51,14 @@ Shader "Custom/FabricPBR_ProceduralPattern"
         _TensionSheerness("Tension Makes Sheerer (1 = physical)", Range(0, 3)) = 1.0
         [Toggle] _TensionDebug("Debug View (red = stretched  blue = squashed)", Float) = 0
 
+        [Header(Wrinkles  (needs Live Tension))]
+        // Folds appear where the fabric is squashed, such as behind a bent knee.
+        _WrinkleStrength("Wrinkle Strength (0 = off)", Range(0, 2)) = 0.6
+        _WrinkleDensity("Wrinkle Darkening", Range(0, 1)) = 0.5
+        _WrinkleSensitivity("Wrinkle Sensitivity", Range(1, 10)) = 4.0
+        _WrinkleScale("Wrinkle Scale (folds per UV)", Float) = 80
+        _WrinkleAngle("Fold Direction (degrees)", Range(0, 180)) = 0
+
         [Header(Toon Shading)]
         _ShadeColor("Shade Tint (multiplies fabric color)", Color) = (0.55, 0.5, 0.6, 1)
         _ShadeStep("Shade Step", Range(0, 1)) = 0.5
@@ -160,6 +168,12 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 float  _LiveTension;
                 float  _TensionSheerness;
                 float  _TensionDebug;
+
+                float  _WrinkleStrength;
+                float  _WrinkleDensity;
+                float  _WrinkleSensitivity;
+                float  _WrinkleScale;
+                float  _WrinkleAngle;
 
                 float4 _ShadeColor;
                 float  _ShadeStep;
@@ -423,6 +437,22 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 return g;
             }
 
+            // ── Wrinkles ─────────────────────────────────
+            // Height of the fold pattern, 0..1, ridges near 1. Folds are long
+            // along p.x and repeat along p.y, with a slow wave so they do
+            // not look ruled.
+            float WrinkleHeight(float2 p)
+            {
+                float2 q = float2(p.x * 0.12, p.y);
+                q.y += (GrainBrightness(q * float2(1.0, 0.35) + 31.7) - 0.5) * 1.2;
+
+                float a = GrainBrightness(q);
+                float b = GrainBrightness(q * 2.17 + 11.3);
+                float ridgeA = 1.0 - abs(a * 2.0 - 1.0);
+                float ridgeB = 1.0 - abs(b * 2.0 - 1.0);
+                return ridgeA * ridgeA * 0.7 + ridgeB * ridgeB * 0.3;
+            }
+
             float GlintLobe(GrainLayer g0, GrainLayer g1, float blend, float3 V, float3 L)
             {
                 float3 H = SafeNormalize(V + L);
@@ -517,6 +547,44 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                     return float4(debugColor, 1.0);
                 }
 
+                // ══════════════════════════════════════════
+                // Wrinkles: folds where the fabric is squashed
+                // ══════════════════════════════════════════
+                // lightNormalWS feeds the sheen; it is the smooth normal
+                // unless wrinkles tilt it.
+                float3 lightNormalWS = geomNormalWS;
+
+                float  wrinkleAngle = radians(_WrinkleAngle);
+                float2 wrinkleAxisX = float2(cos(wrinkleAngle), sin(wrinkleAngle));
+                float2 wrinkleAxisY = float2(-wrinkleAxisX.y, wrinkleAxisX.x);
+                float2 wrinkleUV = float2(dot(IN.uv, wrinkleAxisX), dot(IN.uv, wrinkleAxisY))
+                                 * _WrinkleScale;
+
+                // Fade out before folds get thinner than a pixel.
+                float wrinkleFootprint = max(length(ddx(wrinkleUV)), length(ddy(wrinkleUV)));
+                float wrinkleAmount = saturate((1.0 - tension) * _WrinkleSensitivity)
+                                    * (1.0 - smoothstep(0.3, 0.8, wrinkleFootprint))
+                                    * step(0.0001, _WrinkleStrength);
+
+                if (wrinkleAmount > 0.001)
+                {
+                    const float wrinkleStep = 0.1;
+                    float height     = WrinkleHeight(wrinkleUV);
+                    float heightNext = WrinkleHeight(wrinkleUV + float2(0.0, wrinkleStep));
+
+                    // Bunched fabric is denser on the ridges, thinner between.
+                    tau *= max(1.0 + (height - 0.35) * 2.0 * _WrinkleDensity * wrinkleAmount, 0.2);
+
+                    // Tilt the normal across the folds.
+                    float slope = (heightNext - height) / wrinkleStep;
+                    float2 tiltUV = -wrinkleAxisY * slope * _WrinkleStrength * wrinkleAmount;
+                    float3 tiltWS = normalize(IN.tangentWS.xyz)   * tiltUV.x
+                                  + normalize(IN.bitangentWS.xyz) * tiltUV.y;
+
+                    lightNormalWS  = normalize(geomNormalWS + tiltWS);
+                    detailNormalWS = normalize(detailNormalWS + tiltWS);
+                }
+
                 tau *= knitDensity;
 
                 // Light travels through more fabric at grazing angles.
@@ -567,7 +635,8 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // Sheen band: a soft stripe that peaks where N.V equals
                 // _SheenPosition, just inside the silhouette and not on the
                 // very edge, so the edge itself stays dark.
-                float sheenOffset = (novG - _SheenPosition) / max(_SheenWidth, 0.01);
+                float novSheen = saturate(dot(lightNormalWS, viewDirWS));
+                float sheenOffset = (novSheen - _SheenPosition) / max(_SheenWidth, 0.01);
                 float sheenBand   = exp(-sheenOffset * sheenOffset);
 
                 // Accumulators.
@@ -613,7 +682,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 // the same way the toon skin does.
                 bodyLight  += mainLight.color * lerp(_ShadeColor.rgb, (float3)1, mainRamp);
                 sheenLight += mainLight.color * mainLight.shadowAttenuation
-                            * SheenLight(geomNormalWS, mainLight.direction);
+                            * SheenLight(lightNormalWS, mainLight.direction);
                 highlight  += mainLight.color * mainLight.shadowAttenuation
                             * SoftHighlight(detailNormalWS, viewDirWS,
                                             mainLight.direction, hlAlphaSq);
@@ -646,7 +715,7 @@ Shader "Custom/FabricPBR_ProceduralPattern"
                 bodyLight  += lightRad * ToonRamp(geomNormalWS, light.direction,
                                                   light.shadowAttenuation);
                 sheenLight += lightRad * light.shadowAttenuation
-                            * SheenLight(geomNormalWS, light.direction);
+                            * SheenLight(lightNormalWS, light.direction);
                 highlight  += lightRad * light.shadowAttenuation
                             * SoftHighlight(detailNormalWS, viewDirWS,
                                             light.direction, hlAlphaSq);
