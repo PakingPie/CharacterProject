@@ -97,8 +97,8 @@ public class StockingTear : MonoBehaviour
     private Color32[] pixels;
     private Texture2D maskTexture;
 
-    private Mesh bakedMesh;
-    private readonly List<Vector3> bakedVertices = new List<Vector3>();
+    private Vector3[] posedVertices;
+    private Matrix4x4[] skinMatrices;
     private MaterialPropertyBlock propertyBlock;
     private bool ready;
     private bool warned;
@@ -259,8 +259,6 @@ public class StockingTear : MonoBehaviour
 
         DestroyTemporary(maskTexture);
         maskTexture = null;
-        DestroyTemporary(bakedMesh);
-        bakedMesh = null;
     }
 
     private static void DestroyTemporary(Object target)
@@ -460,6 +458,66 @@ public class StockingTear : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════════════
 
     /// <summary>
+    /// Fills posedVertices with the stocking's vertices in world space, in the
+    /// current pose. A skinned mesh is skinned here from its bones and bind
+    /// poses, which gives world positions directly whatever scale or rotation
+    /// the model's hierarchy has. Blend shapes are not included.
+    /// </summary>
+    private bool UpdatePosedVertices()
+    {
+        int count = restVertices.Length;
+        if (posedVertices == null || posedVertices.Length != count)
+            posedVertices = new Vector3[count];
+
+        if (skinnedRenderer == null)
+        {
+            Matrix4x4 toWorld = transform.localToWorldMatrix;
+            for (int i = 0; i < count; i++)
+                posedVertices[i] = toWorld.MultiplyPoint3x4(restVertices[i]);
+            return true;
+        }
+
+        Transform[] bones = skinnedRenderer.bones;
+        Matrix4x4[] bindposes = sourceMesh.bindposes;
+        BoneWeight[] weights = sourceMesh.boneWeights;
+
+        if (bones.Length == 0 || bindposes.Length != bones.Length || weights.Length != count)
+        {
+            // Not really skinned: treat it as a rigid mesh.
+            Matrix4x4 toWorld = transform.localToWorldMatrix;
+            for (int i = 0; i < count; i++)
+                posedVertices[i] = toWorld.MultiplyPoint3x4(restVertices[i]);
+            return true;
+        }
+
+        if (skinMatrices == null || skinMatrices.Length != bones.Length)
+            skinMatrices = new Matrix4x4[bones.Length];
+
+        for (int i = 0; i < bones.Length; i++)
+        {
+            skinMatrices[i] = bones[i] != null
+                ? bones[i].localToWorldMatrix * bindposes[i]
+                : Matrix4x4.identity;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            BoneWeight w = weights[i];
+            Vector3 v = restVertices[i];
+            Vector3 p = Vector3.zero;
+
+            if (w.weight0 > 0f) p += skinMatrices[w.boneIndex0].MultiplyPoint3x4(v) * w.weight0;
+            if (w.weight1 > 0f) p += skinMatrices[w.boneIndex1].MultiplyPoint3x4(v) * w.weight1;
+            if (w.weight2 > 0f) p += skinMatrices[w.boneIndex2].MultiplyPoint3x4(v) * w.weight2;
+            if (w.weight3 > 0f) p += skinMatrices[w.boneIndex3].MultiplyPoint3x4(v) * w.weight3;
+
+            posedVertices[i] = p;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Finds where a world-space ray hits the stocking in its current pose and
     /// returns the matching point in the rest pose.
     /// </summary>
@@ -468,36 +526,12 @@ public class StockingTear : MonoBehaviour
         restPosition = Vector3.zero;
 
         // Vertices in world space, in the current pose.
-        Matrix4x4 toWorld;
-        IList<Vector3> posed;
+        if (!UpdatePosedVertices())
+            return false;
 
-        if (skinnedRenderer != null)
-        {
-            if (bakedMesh == null)
-            {
-                bakedMesh = new Mesh();
-                bakedMesh.name = "StockingTear Baked";
-                bakedMesh.hideFlags = HideFlags.HideAndDontSave;
-            }
-
-            skinnedRenderer.BakeMesh(bakedMesh, true);
-            bakedMesh.GetVertices(bakedVertices);
-            if (bakedVertices.Count != restVertices.Length)
-                return false;
-
-            posed = bakedVertices;
-            toWorld = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
-        }
-        else
-        {
-            posed = restVertices;
-            toWorld = transform.localToWorldMatrix;
-        }
-
-        // Test in the mesh's own space: transform the ray once, not every vertex.
-        Matrix4x4 toLocal = toWorld.inverse;
-        Vector3 origin = toLocal.MultiplyPoint3x4(worldRay.origin);
-        Vector3 direction = toLocal.MultiplyVector(worldRay.direction);
+        Vector3[] posed = posedVertices;
+        Vector3 origin = worldRay.origin;
+        Vector3 direction = worldRay.direction;
 
         float bestDistance = float.MaxValue;
         int bestTriangle = -1;
@@ -615,9 +649,15 @@ public class StockingTearEditor : Editor
             Ray ray = HandleUtility.GUIPointToWorldRay(current.mousePosition);
             if (tear.TearAtRay(ray, type))
             {
-                current.Use();
                 SceneView.RepaintAll();
             }
+            else
+            {
+                Debug.Log("[StockingTear] The click did not hit the stocking.", tear);
+            }
+
+            // The tool owns the click either way, so it never changes the selection.
+            current.Use();
         }
     }
 }
