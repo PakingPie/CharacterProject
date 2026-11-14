@@ -1,6 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -24,8 +28,9 @@ using UnityEditor;
 /// SETUP
 /// ──────
 /// 1. Add this component to the stocking object.
-/// 2. In the Inspector, switch on "Tear Tool" and click on the stocking in the
-///    Scene view. Hold Shift to paint the other tear type.
+/// 2. Enter Play mode and left-click the stocking in the Game view. Hold Shift
+///    for the other tear type. (In Edit mode, the Inspector's "Tear Tool" does
+///    the same in the Scene view.)
 /// 3. "Restore" removes every tear.
 ///
 /// Tears are kept in memory only. They are gone after a script reload or when
@@ -60,6 +65,14 @@ public class StockingTear : MonoBehaviour
     [Tooltip("Width of a new run in metres.")]
     [Min(0.0005f)]
     public float runWidth = 0.004f;
+
+    [Header("Play Mode")]
+    [Tooltip("In Play mode, a left click in the Game view tears the stocking.\n" +
+             "Hold Shift for the other tear type.")]
+    public bool clickToTearInPlayMode = true;
+
+    [Tooltip("Camera used for clicks. Empty = the main camera.")]
+    public Camera clickCamera;
 
     [Header("Mesh")]
     [Tooltip("Mesh-space axis that points from the foot towards the hip. Runs follow it.")]
@@ -124,6 +137,80 @@ public class StockingTear : MonoBehaviour
         // the renderer's property block.
         if (ready)
             ApplyToRenderer();
+    }
+
+    private void Update()
+    {
+        if (!Application.isPlaying || !clickToTearInPlayMode)
+            return;
+
+        if (!ReadClick(out Vector2 screenPosition, out bool shiftHeld))
+            return;
+
+        Camera cam = clickCamera != null ? clickCamera : Camera.main;
+        if (cam == null)
+        {
+            Debug.LogWarning("[StockingTear] No camera for clicks. Assign Click Camera, " +
+                             "or tag a camera MainCamera.", this);
+            return;
+        }
+
+        StockingTearType type = tearType;
+        if (shiftHeld)
+            type = type == StockingTearType.Hole ? StockingTearType.Run : StockingTearType.Hole;
+
+        Ray ray = cam.ScreenPointToRay(screenPosition);
+        if (!TearAtRay(ray, type))
+            Debug.Log("[StockingTear] The click did not hit the stocking. " + DescribeMiss(ray), this);
+    }
+
+    /// <summary>True on the frame the left mouse button goes down.</summary>
+    private static bool ReadClick(out Vector2 screenPosition, out bool shiftHeld)
+    {
+        screenPosition = Vector2.zero;
+        shiftHeld = false;
+
+#if ENABLE_INPUT_SYSTEM
+        Mouse mouse = Mouse.current;
+        if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+            return false;
+
+        screenPosition = mouse.position.ReadValue();
+        Keyboard keyboard = Keyboard.current;
+        shiftHeld = keyboard != null && keyboard.shiftKey.isPressed;
+        return true;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+        if (!Input.GetMouseButtonDown(0))
+            return false;
+
+        screenPosition = Input.mousePosition;
+        shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    /// <summary>
+    /// Text for the Console when a click misses: where the ray is and where
+    /// the component thinks the stocking is. If the two are far apart, the
+    /// hit test is looking in the wrong place.
+    /// </summary>
+    public string DescribeMiss(Ray ray)
+    {
+        if (!ready || posedVertices == null || posedVertices.Length == 0)
+            return "The component is not initialised.";
+
+        Vector3 min = posedVertices[0];
+        Vector3 max = posedVertices[0];
+        for (int i = 1; i < posedVertices.Length; i++)
+        {
+            min = Vector3.Min(min, posedVertices[i]);
+            max = Vector3.Max(max, posedVertices[i]);
+        }
+
+        return $"Ray from {ray.origin} towards {ray.direction}. " +
+               $"Stocking spans {min} to {max} in world space.";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -653,7 +740,8 @@ public class StockingTearEditor : Editor
             }
             else
             {
-                Debug.Log("[StockingTear] The click did not hit the stocking.", tear);
+                Debug.Log("[StockingTear] The click did not hit the stocking. " +
+                          tear.DescribeMiss(ray), tear);
             }
 
             // The tool owns the click either way, so it never changes the selection.
